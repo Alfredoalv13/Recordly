@@ -4215,7 +4215,7 @@ export async function resolveNativeVideoEncoder(
 export function canCopyAudioCodecIntoMp4(codec?: string | null) {
 	const normalized = (codec ?? "").trim().toLowerCase();
 	if (!normalized) {
-		return true;
+		return false;
 	}
 
 	return (

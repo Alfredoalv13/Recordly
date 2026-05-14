@@ -706,8 +706,7 @@ describe("buildExperimentalNvidiaCudaStaticLayoutArgs", () => {
 describe("buildExperimentalWindowsGpuStaticLayoutArgs", () => {
 	it("prefers the high-performance adapter by default for D3D11 fallback diagnostics", () => {
 		const envName = "RECORDLY_WINDOWS_GPU_EXPORT_ADAPTER_INDEX";
-		const preferEnvName =
-			"RECORDLY_WINDOWS_GPU_EXPORT_PREFER_HIGH_PERFORMANCE_ADAPTER";
+		const preferEnvName = "RECORDLY_WINDOWS_GPU_EXPORT_PREFER_HIGH_PERFORMANCE_ADAPTER";
 		const originalValue = process.env[envName];
 		const originalPreferValue = process.env[preferEnvName];
 		delete process.env[envName];
@@ -895,6 +894,16 @@ describe("buildNativeVideoAudioMuxArgs", () => {
 		expect(args.join(";")).not.toContain("-c:a;copy");
 	});
 
+	it("transcodes unknown source audio instead of copying unsafe codecs into MP4", () => {
+		const args = buildNativeVideoAudioMuxArgs("video.mp4", "source.wav", "out.mp4", {
+			audioMode: "copy-source",
+			outputDurationSec: 60,
+		});
+
+		expect(args).toEqual(expect.arrayContaining(["-c:a", "aac", "-b:a", "192k"]));
+		expect(args.join(";")).not.toContain("-c:a;copy");
+	});
+
 	it("keeps filtered audio on the AAC encode path", () => {
 		const args = buildNativeVideoAudioMuxArgs("video.mp4", "source.mp4", "out.mp4", {
 			audioMode: "trim-source",
@@ -944,6 +953,11 @@ describe("canCopyAudioCodecIntoMp4", () => {
 
 	it("blocks Opus so native exports transcode it to AAC for MP4", () => {
 		expect(canCopyAudioCodecIntoMp4("opus")).toBe(false);
+	});
+
+	it("blocks unknown codecs so sidecar WAV/PCM audio is encoded for MP4", () => {
+		expect(canCopyAudioCodecIntoMp4(undefined)).toBe(false);
+		expect(canCopyAudioCodecIntoMp4("")).toBe(false);
 	});
 });
 
