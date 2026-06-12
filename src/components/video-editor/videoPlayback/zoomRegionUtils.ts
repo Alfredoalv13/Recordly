@@ -254,6 +254,11 @@ export function findDominantRegion(
 		if (connectedHold) {
 			return { ...connectedHold, transition: null };
 		}
+
+		const connectedTransition = getConnectedRegionTransition(connectedPairs, timeMs);
+		if (connectedTransition) {
+			return connectedTransition;
+		}
 	}
 
 	const activeRegion = getActiveRegion(regions, timeMs, connectedPairs, options);
