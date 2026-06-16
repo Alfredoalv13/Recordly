@@ -49,6 +49,14 @@ export function getPrebundledNativeHelperPath(binaryName: string): string {
 	return resolveUnpackedAppPath("electron", "native", "bin", getNativeArchTag(), binaryName);
 }
 
+function getWindowsNativeArchTag(): string {
+	return process.arch === "arm64" ? "win32-arm64" : "win32-x64";
+}
+
+function getPrebundledWindowsNativeHelperPath(binaryName: string): string {
+	return resolveUnpackedAppPath("electron", "native", "bin", getWindowsNativeArchTag(), binaryName);
+}
+
 export function resolvePreferredWindowsNativeHelperPath(
 	helperDirectory: string,
 	binaryName: string,
@@ -61,7 +69,7 @@ export function resolvePreferredWindowsNativeHelperPath(
 		"Release",
 		binaryName,
 	);
-	const prebundledPath = getPrebundledNativeHelperPath(binaryName);
+	const prebundledPath = getPrebundledWindowsNativeHelperPath(binaryName);
 
 	if (app.isPackaged && existsSync(prebundledPath)) {
 		return prebundledPath;
