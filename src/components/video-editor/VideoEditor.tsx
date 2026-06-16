@@ -5251,7 +5251,7 @@ export default function VideoEditor() {
 					<DialogDescription className="text-muted-foreground">
 						{t(
 							"editor.nativeCaptureUnavailable.description",
-							"Your device does not support native capture. This could be for a variety of reasons we haven’t figured out yet. This doesn’t break Recordly, but it does make cursor smoothing impossible.",
+							"Your device does not support native capture. This could be for a variety of reasons we haven’t figured out yet. This doesn’t break VybeClip, but it does make cursor smoothing impossible.",
 						)}
 					</DialogDescription>
 				</DialogHeader>

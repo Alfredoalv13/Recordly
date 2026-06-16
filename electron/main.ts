@@ -519,22 +519,22 @@ function syncDockIcon() {
 function getUpdateNotificationTitle(payload: UpdateToastPayload) {
 	switch (payload.phase) {
 		case "available":
-			return `Recordly ${payload.version} is available`;
+			return `VybeClip ${payload.version} is available`;
 		case "downloading":
-			return `Downloading Recordly ${payload.version}`;
+			return `Downloading VybeClip ${payload.version}`;
 		case "ready":
-			return `Recordly ${payload.version} is ready`;
+			return `VybeClip ${payload.version} is ready`;
 		case "error":
-			return `Recordly ${payload.version} needs attention`;
+			return `VybeClip ${payload.version} needs attention`;
 	}
 }
 
 function getUpdateNotificationBody(payload: UpdateToastPayload) {
 	switch (payload.phase) {
 		case "available":
-			return "Click to install the update and restart Recordly.";
+			return "Click to install the update and restart VybeClip.";
 		case "downloading":
-			return "Recordly is downloading the update and will restart when it is ready.";
+			return "VybeClip is downloading the update and will restart when it is ready.";
 		case "ready":
 			return "Click to install the downloaded update and restart.";
 		case "error":
@@ -709,7 +709,7 @@ ipcMain.handle("check-for-app-updates", async () => {
 function updateTrayMenu(recording: boolean = false) {
 	if (!tray) return;
 	const trayIcon = recording ? getRecordingTrayIcon() : getDefaultTrayIcon();
-	const trayToolTip = recording ? `Recording: ${selectedSourceName}` : "Recordly";
+	const trayToolTip = recording ? `Recording: ${selectedSourceName}` : "VybeClip";
 	const menuTemplate = recording
 		? [
 				{
@@ -876,7 +876,7 @@ app.on("second-instance", () => {
 // Register all IPC handlers when app is ready
 app.whenReady().then(async () => {
 	if (process.platform === "win32") {
-		app.setAppUserModelId("dev.recordly.app");
+		app.setAppUserModelId("studio.boxcreative.vybeclip");
 	}
 
 	session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
