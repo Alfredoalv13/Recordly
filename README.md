@@ -54,6 +54,8 @@ npm run build:mac
 
 Build artifacts are written to `release/`.
 
+See the [MVP release guide](./_documentation/MVP_RELEASE.md) for acceptance checks, signing, artifacts, and notarization.
+
 ## macOS Permissions
 
 VybeClip requests Screen Recording and Accessibility access when recording requires them. Microphone and Camera access are requested only when those capture options are enabled.

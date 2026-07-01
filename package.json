@@ -31,6 +31,7 @@
 		"build:windows-capture": "node scripts/build-windows-capture.mjs",
 		"build:cursor-monitor": "node scripts/build-cursor-monitor.mjs",
 		"build:mac": "npm run build:platform-native-helpers && tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs && npm run smoke:electron-main-cjs && electron-builder --mac",
+		"sign:mac": "node scripts/sign-macos-app.mjs",
 		"build:win": "npm run build:platform-native-helpers && tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs && npm run smoke:electron-main-cjs && electron-builder --win",
 		"build:linux": "npm run build:platform-native-helpers && tsc && vite build --config vite.config.ts && npm run normalize:electron-main-cjs && npm run smoke:electron-main-cjs && electron-builder --linux",
 		"i18n:check": "node scripts/i18n-check.mjs",
