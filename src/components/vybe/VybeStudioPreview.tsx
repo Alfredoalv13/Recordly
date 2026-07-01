@@ -1,4 +1,5 @@
 import {
+	ArrowClockwiseIcon,
 	ArrowSquareOutIcon,
 	CameraIcon,
 	CaretDownIcon,
@@ -13,6 +14,7 @@ import {
 	SlidersHorizontalIcon,
 	SparkleIcon,
 	UploadSimpleIcon,
+	WarningCircleIcon,
 	WaveformIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
@@ -21,9 +23,11 @@ import { VybeClipLogo } from "../brand/VybeClipLogo";
 import type { ProjectLibraryEntry } from "../video-editor/ProjectBrowserDialog";
 import { toFileUrl } from "../video-editor/projectPersistence";
 import {
+	getStudioPermissionState,
 	importStudioVideo,
 	openRecentStudioProject,
 	openStudioProject,
+	type StudioPermissionState,
 	startStudioRecording,
 } from "./studioActions";
 
@@ -48,6 +52,8 @@ export function VybeStudioPreview() {
 	const [projects, setProjects] = useState<ProjectLibraryEntry[]>([]);
 	const [projectsLoading, setProjectsLoading] = useState(isDesktop);
 	const [pendingAction, setPendingAction] = useState<string | null>(null);
+	const [permissions, setPermissions] = useState<StudioPermissionState | null>(null);
+	const [permissionsLoading, setPermissionsLoading] = useState(isDesktop);
 
 	const refreshProjects = useCallback(async () => {
 		if (!window.electronAPI) return;
@@ -71,6 +77,23 @@ export function VybeStudioPreview() {
 		void refreshProjects();
 	}, [refreshProjects]);
 
+	const refreshPermissions = useCallback(async () => {
+		if (!window.electronAPI) return;
+
+		setPermissionsLoading(true);
+		try {
+			setPermissions(await getStudioPermissionState(window.electronAPI));
+		} catch (error) {
+			console.error("Failed to load VybeClip permission status:", error);
+		} finally {
+			setPermissionsLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		void refreshPermissions();
+	}, [refreshPermissions]);
+
 	const runAction = useCallback(
 		async (actionName: string, action: () => Promise<void>) => {
 			if (!window.electronAPI || pendingAction) return;
@@ -91,9 +114,13 @@ export function VybeStudioPreview() {
 
 	const handleRecord = useCallback(() => {
 		void runAction("record", async () => {
-			await startStudioRecording(window.electronAPI);
+			try {
+				await startStudioRecording(window.electronAPI);
+			} finally {
+				await refreshPermissions();
+			}
 		});
-	}, [runAction]);
+	}, [refreshPermissions, runAction]);
 
 	const handleImport = useCallback(() => {
 		void runAction("import", async () => {
@@ -127,6 +154,23 @@ export function VybeStudioPreview() {
 
 	const recentProjects = projects.slice(0, 5);
 	const actionsDisabled = !isDesktop || pendingAction !== null;
+	const permissionIssue =
+		permissions?.platform === "darwin" && !permissions.screenRecordingGranted
+			? "screen"
+			: permissions?.platform === "darwin" && !permissions.accessibilityGranted
+				? "accessibility"
+				: null;
+
+	const handleOpenPermissionSettings = useCallback(() => {
+		if (!permissionIssue) return;
+		void runAction("permissions", async () => {
+			if (permissionIssue === "screen") {
+				await window.electronAPI.openScreenRecordingPreferences();
+			} else {
+				await window.electronAPI.openAccessibilityPreferences();
+			}
+		});
+	}, [permissionIssue, runAction]);
 
 	return (
 		<div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#05080A] text-[#C6C6D0]">
@@ -181,6 +225,49 @@ export function VybeStudioPreview() {
 					</button>
 				</div>
 			</header>
+			{permissionIssue && (
+				<div className="flex min-h-11 shrink-0 items-center justify-between gap-4 border-b border-[#D59D80]/20 bg-[#B6410F]/10 px-4 py-2 text-[#F3E7DE]">
+					<div className="flex min-w-0 items-center gap-2.5">
+						<WarningCircleIcon
+							size={17}
+							className="shrink-0 text-[#D59D80]"
+							weight="fill"
+						/>
+						<div className="min-w-0">
+							<p className="truncate text-xs font-semibold">
+								{permissionIssue === "screen"
+									? "Screen Recording permission is required"
+									: "Accessibility permission is required for cursor tracking"}
+							</p>
+							<p className="truncate text-[10px] text-[#C6C6D0]/55">
+								Enable VybeClip in macOS Privacy & Security, then reopen the app.
+							</p>
+						</div>
+					</div>
+					<div className="flex shrink-0 items-center gap-2">
+						<button
+							type="button"
+							onClick={() => void refreshPermissions()}
+							disabled={permissionsLoading}
+							className="grid h-7 w-7 place-items-center rounded-md border border-white/[0.08] text-[#C6C6D0] transition hover:bg-white/[0.05] disabled:opacity-45"
+							aria-label="Refresh permission status"
+						>
+							<ArrowClockwiseIcon
+								size={13}
+								className={permissionsLoading ? "animate-spin" : ""}
+							/>
+						</button>
+						<button
+							type="button"
+							onClick={handleOpenPermissionSettings}
+							disabled={pendingAction !== null}
+							className="h-7 rounded-md bg-[#D59D80] px-3 text-[10px] font-semibold text-[#0D1D25] transition hover:bg-[#E3B59D] disabled:opacity-45"
+						>
+							Open Settings
+						</button>
+					</div>
+				</div>
+			)}
 
 			<div className="grid min-h-0 flex-1 grid-cols-[minmax(190px,240px)_minmax(0,1fr)] lg:grid-cols-[256px_minmax(0,1fr)_288px]">
 				<aside className="hidden min-h-0 overflow-y-auto border-r border-white/[0.06] bg-[#0A1115] p-3 sm:block">

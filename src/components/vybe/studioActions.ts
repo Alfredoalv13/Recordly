@@ -1,7 +1,12 @@
 type StudioElectronApi = Pick<
 	Window["electronAPI"],
 	| "loadProjectFile"
+	| "getAccessibilityPermissionStatus"
+	| "getPlatform"
+	| "getScreenRecordingPermissionStatus"
+	| "openAccessibilityPreferences"
 	| "openProjectFileAtPath"
+	| "openScreenRecordingPreferences"
 	| "openSourceSelector"
 	| "openVideoFilePicker"
 	| "setCurrentVideoPath"
@@ -9,7 +14,47 @@ type StudioElectronApi = Pick<
 	| "switchToEditor"
 >;
 
+export type StudioPermissionState = {
+	platform: string;
+	screenRecordingGranted: boolean;
+	accessibilityGranted: boolean;
+};
+
+export async function getStudioPermissionState(
+	api: StudioElectronApi,
+): Promise<StudioPermissionState> {
+	const platform = await api.getPlatform();
+	if (platform !== "darwin") {
+		return {
+			platform,
+			screenRecordingGranted: true,
+			accessibilityGranted: true,
+		};
+	}
+
+	const [screenRecording, accessibility] = await Promise.all([
+		api.getScreenRecordingPermissionStatus(),
+		api.getAccessibilityPermissionStatus(),
+	]);
+
+	return {
+		platform,
+		screenRecordingGranted: screenRecording.success && screenRecording.status === "granted",
+		accessibilityGranted: accessibility.success && accessibility.trusted,
+	};
+}
+
 export async function startStudioRecording(api: StudioElectronApi) {
+	const permissions = await getStudioPermissionState(api);
+	if (!permissions.screenRecordingGranted) {
+		await api.openScreenRecordingPreferences();
+		throw new Error("Enable Screen Recording in System Settings, then reopen VybeClip");
+	}
+	if (!permissions.accessibilityGranted) {
+		await api.openAccessibilityPreferences();
+		throw new Error("Enable Accessibility in System Settings, then reopen VybeClip");
+	}
+
 	const result = await api.showRecordingControls();
 	if (!result.success) {
 		throw new Error("Could not open recording controls");

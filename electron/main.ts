@@ -871,17 +871,7 @@ app.whenReady().then(async () => {
 
 	session.defaultSession.setDevicePermissionHandler((_details) => true);
 
-	if (process.platform === "darwin") {
-		const cameraStatus = systemPreferences.getMediaAccessStatus("camera");
-		if (cameraStatus !== "granted") {
-			await systemPreferences.askForMediaAccess("camera");
-		}
-
-		const micStatus = systemPreferences.getMediaAccessStatus("microphone");
-		if (micStatus !== "granted") {
-			await systemPreferences.askForMediaAccess("microphone");
-		}
-	} else if (process.platform === "win32") {
+	if (process.platform === "win32") {
 		const cameraStatus = systemPreferences.getMediaAccessStatus("camera");
 		const micStatus = systemPreferences.getMediaAccessStatus("microphone");
 		if (cameraStatus !== "granted") {

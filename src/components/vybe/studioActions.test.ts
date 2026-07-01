@@ -10,6 +10,15 @@ function createApi() {
 	return {
 		showRecordingControls: vi.fn().mockResolvedValue({ success: true }),
 		openSourceSelector: vi.fn().mockResolvedValue(undefined),
+		getPlatform: vi.fn().mockResolvedValue("darwin"),
+		getScreenRecordingPermissionStatus: vi
+			.fn()
+			.mockResolvedValue({ success: true, status: "granted" }),
+		getAccessibilityPermissionStatus: vi
+			.fn()
+			.mockResolvedValue({ success: true, trusted: true, prompted: false }),
+		openScreenRecordingPreferences: vi.fn().mockResolvedValue({ success: true }),
+		openAccessibilityPreferences: vi.fn().mockResolvedValue({ success: true }),
 		openVideoFilePicker: vi.fn().mockResolvedValue({ success: true, path: "/tmp/capture.mp4" }),
 		setCurrentVideoPath: vi.fn().mockResolvedValue({ success: true }),
 		switchToEditor: vi.fn().mockResolvedValue(undefined),
@@ -31,6 +40,40 @@ describe("VybeClip Studio actions", () => {
 		expect(api.showRecordingControls.mock.invocationCallOrder[0]).toBeLessThan(
 			api.openSourceSelector.mock.invocationCallOrder[0],
 		);
+	});
+
+	it("opens Screen Recording settings instead of the HUD when permission is missing", async () => {
+		const api = createApi();
+		api.getScreenRecordingPermissionStatus.mockResolvedValue({
+			success: true,
+			status: "denied",
+		});
+
+		await expect(startStudioRecording(api)).rejects.toThrow("Enable Screen Recording");
+		expect(api.openScreenRecordingPreferences).toHaveBeenCalledOnce();
+		expect(api.showRecordingControls).not.toHaveBeenCalled();
+	});
+
+	it("opens Accessibility settings instead of the HUD when permission is missing", async () => {
+		const api = createApi();
+		api.getAccessibilityPermissionStatus.mockResolvedValue({
+			success: true,
+			trusted: false,
+			prompted: false,
+		});
+
+		await expect(startStudioRecording(api)).rejects.toThrow("Enable Accessibility");
+		expect(api.openAccessibilityPreferences).toHaveBeenCalledOnce();
+		expect(api.showRecordingControls).not.toHaveBeenCalled();
+	});
+
+	it("does not require macOS permissions on other platforms", async () => {
+		const api = createApi();
+		api.getPlatform.mockResolvedValue("win32");
+
+		await startStudioRecording(api);
+		expect(api.getScreenRecordingPermissionStatus).not.toHaveBeenCalled();
+		expect(api.showRecordingControls).toHaveBeenCalledOnce();
 	});
 
 	it("imports a selected video before opening the editor", async () => {
