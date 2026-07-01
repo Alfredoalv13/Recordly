@@ -203,7 +203,7 @@ function getConnectedRegionTransition(connectedPairs: ConnectedRegionPair[], tim
 	for (const pair of connectedPairs) {
 		const { currentRegion, nextRegion, transitionStart, transitionEnd } = pair;
 
-		if (timeMs < transitionStart || timeMs > transitionEnd) {
+		if (timeMs <= transitionStart || timeMs >= transitionEnd) {
 			continue;
 		}
 
@@ -250,6 +250,11 @@ export function findDominantRegion(
 	const connectedPairs = options.connectZooms ? getConnectedRegionPairs(regions) : [];
 
 	if (options.connectZooms) {
+		const connectedTransition = getConnectedRegionTransition(connectedPairs, timeMs);
+		if (connectedTransition) {
+			return connectedTransition;
+		}
+
 		const connectedHold = getConnectedRegionHold(timeMs, connectedPairs);
 		if (connectedHold) {
 			return { ...connectedHold, transition: null };

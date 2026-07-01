@@ -30,27 +30,27 @@
 
 	:root {
 		--app-font-sans: "SF Pro Display", "SF Pro Text", Helvetica, sans-serif;
-		--brand-accent: #2563eb;
-		--brand-accent-rgb: 37, 99, 235;
+		--brand-accent: #b6410f;
+		--brand-accent-rgb: 182, 65, 15;
 		--background: 0 0% 100%;
 		--foreground: 20 14.3% 4.1%;
 		--card: 0 0% 100%;
 		--card-foreground: 20 14.3% 4.1%;
 		--popover: 0 0% 100%;
 		--popover-foreground: 20 14.3% 4.1%;
-		--primary: 221 83% 53%;
+		--primary: 19 85% 39%;
 		--primary-foreground: 210 40% 98%;
 		--secondary: 60 4.8% 95.9%;
 		--secondary-foreground: 24 9.8% 10%;
 		--muted: 60 4.8% 95.9%;
 		--muted-foreground: 25 5.3% 44.7%;
-		--accent: 214 100% 97%;
-		--accent-foreground: 221 83% 40%;
+		--accent: 21 51% 91%;
+		--accent-foreground: 19 85% 31%;
 		--destructive: 0 84.2% 60.2%;
 		--destructive-foreground: 60 9.1% 97.8%;
 		--border: 20 5.9% 90%;
 		--input: 20 5.9% 90%;
-		--ring: 221 83% 53%;
+		--ring: 19 85% 39%;
 		--chart-1: 12 76% 61%;
 		--chart-2: 173 58% 39%;
 		--chart-3: 197 37% 24%;
@@ -59,11 +59,11 @@
 		--radius: 0.5rem;
 
 		/* Editor surface colors — light mode */
-		--editor-bg: 0 0% 100%;
-		--editor-header: 0 0% 97%;
-		--editor-panel: 0 0% 98%;
-		--editor-surface: 0 0% 97%;
-		--editor-surface-alt: 0 0% 95%;
+		--editor-bg: 32 28% 97%;
+		--editor-header: 21 39% 94%;
+		--editor-panel: 21 34% 96%;
+		--editor-surface: 21 28% 94%;
+		--editor-surface-alt: 21 22% 91%;
 		--editor-dialog: 0 0% 100%;
 		--editor-dialog-alt: 0 0% 98%;
 		--editor-timeline: 220 13% 91%;
@@ -72,53 +72,53 @@
 
 		/* Slider track colors — light mode */
 		--slider-track: 0 0% 0% / 0.12;
-		--slider-thumb: 0 0% 10%;
+		--slider-thumb: 19 85% 39%;
 		--slider-thumb-shadow: 0 0% 0% / 0.22;
 		--slider-glow: 0 0% 0% / 0.35;
 	}
 	.dark {
-		--background: 20 14.3% 4.1%;
-		--foreground: 60 9.1% 97.8%;
-		--card: 20 14.3% 4.1%;
-		--card-foreground: 60 9.1% 97.8%;
-		--popover: 20 14.3% 4.1%;
-		--popover-foreground: 60 9.1% 97.8%;
-		--primary: 221 83% 53%;
+		--background: 200 33% 3%;
+		--foreground: 240 10% 80%;
+		--card: 202 35% 6%;
+		--card-foreground: 240 10% 80%;
+		--popover: 202 35% 6%;
+		--popover-foreground: 240 10% 80%;
+		--primary: 19 85% 39%;
 		--primary-foreground: 210 40% 98%;
-		--secondary: 12 6.5% 15.1%;
-		--secondary-foreground: 60 9.1% 97.8%;
-		--muted: 12 6.5% 15.1%;
-		--muted-foreground: 24 5.4% 63.9%;
-		--accent: 217 33% 17%;
-		--accent-foreground: 210 40% 98%;
+		--secondary: 202 48% 10%;
+		--secondary-foreground: 240 10% 80%;
+		--muted: 202 35% 12%;
+		--muted-foreground: 240 7% 62%;
+		--accent: 197 72% 23%;
+		--accent-foreground: 21 51% 88%;
 		--destructive: 0 62.8% 30.6%;
 		--destructive-foreground: 60 9.1% 97.8%;
-		--border: 12 6.5% 15.1%;
-		--input: 12 6.5% 15.1%;
-		--ring: 221 83% 53%;
-		--chart-1: 220 70% 50%;
-		--chart-2: 160 60% 45%;
-		--chart-3: 30 80% 55%;
-		--chart-4: 280 65% 60%;
-		--chart-5: 340 75% 55%;
+		--border: 202 35% 16%;
+		--input: 202 35% 16%;
+		--ring: 19 85% 39%;
+		--chart-1: 19 85% 39%;
+		--chart-2: 197 72% 23%;
+		--chart-3: 21 51% 67%;
+		--chart-4: 21 48% 53%;
+		--chart-5: 240 10% 80%;
 
 		/* Editor surface colors — dark mode */
-		--editor-bg: 240 6% 7%;
-		--editor-header: 240 5% 8.5%;
-		--editor-panel: 240 5% 9%;
-		--editor-surface: 240 4% 10%;
-		--editor-surface-alt: 240 5% 11%;
-		--editor-dialog: 240 10% 3%;
-		--editor-dialog-alt: 237 9% 5%;
-		--editor-timeline: 240 6% 7%;
-		--editor-row: 240 4% 10%;
-		--editor-subrow: 240 7% 15%;
+		--editor-bg: 200 33% 3%;
+		--editor-header: 202 35% 6%;
+		--editor-panel: 202 35% 6%;
+		--editor-surface: 202 48% 10%;
+		--editor-surface-alt: 197 55% 13%;
+		--editor-dialog: 200 33% 3%;
+		--editor-dialog-alt: 202 35% 6%;
+		--editor-timeline: 202 35% 6%;
+		--editor-row: 202 48% 10%;
+		--editor-subrow: 197 45% 16%;
 
 		/* Slider track colors — dark mode */
 		--slider-track: 0 0% 100% / 0.12;
-		--slider-thumb: 0 0% 100%;
-		--slider-thumb-shadow: 0 0% 100% / 0.32;
-		--slider-glow: 0 0% 100% / 0.5;
+		--slider-thumb: 21 51% 67%;
+		--slider-thumb-shadow: 21 51% 67% / 0.32;
+		--slider-glow: 19 85% 39% / 0.5;
 	}
 }
 
@@ -171,11 +171,11 @@
 		border-radius: inherit;
 		background: linear-gradient(
 			90deg,
-			rgba(37, 99, 235, 0) 0%,
-			rgba(37, 99, 235, 0.35) 18%,
-			rgba(96, 165, 250, 0.92) 52%,
-			rgba(37, 99, 235, 0.3) 82%,
-			rgba(37, 99, 235, 0) 100%
+			rgba(182, 65, 15, 0) 0%,
+			rgba(192, 117, 77, 0.28) 18%,
+			rgba(213, 157, 128, 0.92) 52%,
+			rgba(182, 65, 15, 0.3) 82%,
+			rgba(182, 65, 15, 0) 100%
 		);
 		animation: indeterminate-progress 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 	}
@@ -268,6 +268,4 @@
 		transform: translateX(270%);
 	}
 }
-
-
 
