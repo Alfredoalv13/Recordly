@@ -45,6 +45,7 @@ import {
 	createEditorWindow,
 	createHudOverlayWindow,
 	createSourceSelectorWindow,
+	createStudioWindow,
 	getHudOverlayWindow,
 	getUpdateToastWindow,
 	hideUpdateToastWindow,
@@ -134,6 +135,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 // Window references
 let mainWindow: BrowserWindow | null = null;
+let studioWindow: BrowserWindow | null = null;
 let sourceSelectorWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayContextMenu: Menu | null = null;
@@ -142,6 +144,7 @@ let editorHasUnsavedChanges = false;
 let isForceClosing = false;
 let isCreatingMainWindow = false;
 let isCreatingEditorWindow = false;
+let isAppQuitting = false;
 let activeUpdateNotification: Notification | null = null;
 let activeUpdateNotificationKey: string | null = null;
 const shouldEnforceSingleInstanceLock = !IS_DEV;
@@ -170,7 +173,7 @@ function restoreWindowSafely(window: BrowserWindow | null) {
 		return;
 	}
 
-	if (!isEditorWindow(window) && process.platform === "win32") {
+	if (window === getHudOverlayWindow() && process.platform === "win32") {
 		showHudOverlayFromTray();
 		return;
 	}
@@ -241,6 +244,16 @@ function showHudOverlayFromTray() {
 	return true;
 }
 
+function showOrCreateRecordingControls() {
+	const existingHud = getHudOverlayWindow();
+	if (existingHud) {
+		showHudOverlayFromTray();
+		return existingHud;
+	}
+
+	return createHudOverlayWindow();
+}
+
 ipcMain.on("set-has-unsaved-changes", (_event, hasChanges: boolean) => {
 	editorHasUnsavedChanges = hasChanges;
 });
@@ -259,23 +272,21 @@ function createWindow() {
 		return;
 	}
 
-	if (mainWindow && !mainWindow.isDestroyed()) {
-		restoreWindowSafely(mainWindow);
-		return;
-	}
-
-	const existingHudWindow = getHudOverlayWindow();
-	if (existingHudWindow) {
-		mainWindow = existingHudWindow;
-		restoreWindowSafely(existingHudWindow);
+	if (studioWindow && !studioWindow.isDestroyed()) {
+		mainWindow = studioWindow;
+		restoreWindowSafely(studioWindow);
 		return;
 	}
 
 	isCreatingMainWindow = true;
-	const createdHudWindow = createHudOverlayWindow();
-	mainWindow = createdHudWindow;
-	createdHudWindow.once("closed", () => {
-		if (mainWindow === createdHudWindow) {
+	const createdStudioWindow = createStudioWindow();
+	studioWindow = createdStudioWindow;
+	mainWindow = createdStudioWindow;
+	createdStudioWindow.once("closed", () => {
+		if (studioWindow === createdStudioWindow) {
+			studioWindow = null;
+		}
+		if (mainWindow === createdStudioWindow) {
 			mainWindow = null;
 		}
 	});
@@ -291,47 +302,11 @@ function focusOrCreateMainWindow() {
 	}
 
 	if (!mainWindow || mainWindow.isDestroyed()) {
-		const existingHud = getHudOverlayWindow();
-		if (existingHud && !existingHud.isDestroyed()) {
-			mainWindow = existingHud;
-		} else {
-			createWindow();
-			return;
-		}
+		createWindow();
+		return;
 	}
 
 	if (mainWindow && !mainWindow.isDestroyed()) {
-		// On Linux/Wayland, focus() often doesn't take effect (compositor ignores it). Apps like Telegram
-		// work because they receive an XDG activation token via StatusNotifierItem.ProvideXdgActivationToken;
-		// Electron's tray doesn't handle that yet. Workaround: destroy and recreate the HUD so the new
-		// window gets focus (creation path works). Only for HUD, not editor.
-		if (
-			process.platform === "linux" &&
-			!mainWindow.isFocused() &&
-			!isEditorWindow(mainWindow)
-		) {
-			const win = mainWindow;
-			mainWindow = null;
-			win.once("closed", () => createWindow());
-			win.destroy();
-			return;
-		}
-
-		// On Win32 with mouse passthrough enabled (Win11+), calling
-		// show/moveTop/focus on the transparent HUD overlay permanently corrupts
-		// setIgnoreMouseEvents forwarding, making it click-through.  Only focus
-		// the editor window; the HUD is alwaysOnTop so it doesn't need explicit
-		// focus.  On Win10 (passthrough disabled), the HUD is always interactive
-		// and can be safely shown/restored.
-		if (
-			process.platform === "win32" &&
-			!isEditorWindow(mainWindow) &&
-			isHudOverlayMousePassthroughSupported()
-		) {
-			showHudOverlayFromTray();
-			return;
-		}
-
 		mainWindow.show();
 		if (mainWindow.isMinimized()) mainWindow.restore();
 		mainWindow.moveTop();
@@ -715,16 +690,15 @@ function updateTrayMenu(recording: boolean = false) {
 				{
 					label: "Show Controls",
 					click: () => {
-						if (!showHudOverlayFromTray()) {
-							focusOrCreateMainWindow();
-						}
+						showOrCreateRecordingControls();
 					},
 				},
 				{
 					label: "Stop Recording",
 					click: () => {
-						if (mainWindow && !mainWindow.isDestroyed()) {
-							mainWindow.webContents.send("stop-recording-from-tray");
+						const hud = getHudOverlayWindow();
+						if (hud && !hud.isDestroyed()) {
+							hud.webContents.send("stop-recording-from-tray");
 						}
 					},
 				},
@@ -733,9 +707,7 @@ function updateTrayMenu(recording: boolean = false) {
 				{
 					label: "Open",
 					click: () => {
-						if (!showHudOverlayFromTray()) {
-							focusOrCreateMainWindow();
-						}
+						focusOrCreateMainWindow();
 					},
 				},
 				{
@@ -798,6 +770,10 @@ function createEditorWindowWrapper() {
 	const editorWindow = createEditorWindow();
 	mainWindow = editorWindow;
 	editorHasUnsavedChanges = false;
+	const hudWindow = getHudOverlayWindow();
+	if (hudWindow && !hudWindow.isDestroyed()) {
+		hudWindow.hide();
+	}
 
 	editorWindow.on("closed", () => {
 		if (mainWindow === editorWindow) {
@@ -806,6 +782,9 @@ function createEditorWindowWrapper() {
 		isCreatingEditorWindow = false;
 		isForceClosing = false;
 		editorHasUnsavedChanges = false;
+		if (!isAppQuitting && !IS_SMOKE_EXPORT) {
+			createWindow();
+		}
 	});
 
 	editorWindow.on("close", (event) => {
@@ -851,6 +830,7 @@ function createSourceSelectorWindowWrapper() {
 // On macOS, applications and their menu bar stay active until the user quits
 // explicitly with Cmd + Q.
 app.on("before-quit", () => {
+	isAppQuitting = true;
 	killWindowsCaptureProcess();
 	showCursor();
 	cleanupNativeVideoExportSessions();
@@ -974,6 +954,11 @@ app.whenReady().then(async () => {
 	);
 
 	registerExtensionIpcHandlers();
+
+	ipcMain.handle("show-recording-controls", () => {
+		showOrCreateRecordingControls();
+		return { success: true };
+	});
 
 	if (IS_SMOKE_EXPORT || process.env.RECORDLY_DEV_OPEN_RECORDING_INPUT) {
 		await logSmokeExportGpuDiagnostics();

@@ -823,6 +823,77 @@ function loadPackagedEditorWindow(win: BrowserWindow) {
 	});
 }
 
+function loadStudioWindow(win: BrowserWindow) {
+	const query = { windowType: "studio" };
+	if (VITE_DEV_SERVER_URL) {
+		void win.loadURL(`${VITE_DEV_SERVER_URL}?windowType=studio`);
+		return;
+	}
+
+	const packagedRendererBaseUrl = getPackagedRendererBaseUrl();
+	if (packagedRendererBaseUrl) {
+		void win.loadURL(`${packagedRendererBaseUrl}/?windowType=studio`).catch((error) => {
+			console.warn("[studio-window] packaged renderer URL failed, falling back to file", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			if (!win.isDestroyed()) {
+				void win.loadFile(path.join(RENDERER_DIST, "index.html"), { query });
+			}
+		});
+		return;
+	}
+
+	void win.loadFile(path.join(RENDERER_DIST, "index.html"), { query });
+}
+
+export function createStudioWindow(): BrowserWindow {
+	const isMac = process.platform === "darwin";
+	const { workAreaSize } = getScreen().getPrimaryDisplay();
+	const width = Math.min(1360, Math.max(960, Math.round(workAreaSize.width * 0.82)));
+	const height = Math.min(900, Math.max(680, Math.round(workAreaSize.height * 0.82)));
+
+	const win = new BrowserWindow({
+		width,
+		height,
+		minWidth: 900,
+		minHeight: 640,
+		...(process.platform !== "darwin" && {
+			icon: WINDOW_ICON_PATH,
+		}),
+		...(isMac && {
+			titleBarStyle: "hiddenInset",
+			trafficLightPosition: { x: 14, y: 18 },
+		}),
+		autoHideMenuBar: !isMac,
+		resizable: true,
+		title: "VybeClip Studio",
+		show: false,
+		backgroundColor: "#05080A",
+		webPreferences: {
+			preload: path.join(electronWindowsDir, "preload.mjs"),
+			nodeIntegration: false,
+			contextIsolation: true,
+			webSecurity: false,
+			backgroundThrottling: false,
+		},
+	});
+
+	win.once("ready-to-show", () => {
+		if (!win.isDestroyed()) {
+			win.show();
+		}
+	});
+
+	win.webContents.on("did-finish-load", () => {
+		if (!win.isDestroyed() && !win.isVisible()) {
+			win.show();
+		}
+	});
+
+	loadStudioWindow(win);
+	return win;
+}
+
 export function createEditorWindow(): BrowserWindow {
 	const perfStart = Date.now();
 	console.log("[PERF:MAIN] createEditorWindow: STARTED");

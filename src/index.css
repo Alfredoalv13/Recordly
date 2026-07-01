@@ -141,6 +141,18 @@
 		font: inherit;
 	}
 
+	.electron-drag {
+		-webkit-app-region: drag;
+	}
+
+	.electron-no-drag {
+		-webkit-app-region: no-drag;
+	}
+
+	html[data-platform="macos"] .vybe-studio-header {
+		padding-left: 5.25rem;
+	}
+
 	body .font-mono,
 	body kbd {
 		font-family: var(--app-font-sans);
@@ -268,4 +280,3 @@
 		transform: translateX(270%);
 	}
 }
-

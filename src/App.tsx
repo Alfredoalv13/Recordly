@@ -47,7 +47,7 @@ export default function App() {
 		loadAllCustomFonts().catch((error) => {
 			console.error("Failed to load custom fonts:", error);
 		});
-	}, []);
+	}, [isMacOS]);
 
 	useEffect(() => {
 		document.title =
@@ -70,6 +70,13 @@ export default function App() {
 			return <CountdownOverlay />;
 		case "update-toast":
 			return <UpdateToastWindow />;
+		case "studio":
+			return (
+				<>
+					<VybeStudioPreview />
+					<Toaster />
+				</>
+			);
 		case "editor":
 			return (
 				<ShortcutsProvider>
@@ -78,6 +85,11 @@ export default function App() {
 				</ShortcutsProvider>
 			);
 		default:
-			return <VybeStudioPreview />;
+			return (
+				<>
+					<VybeStudioPreview />
+					<Toaster />
+				</>
+			);
 	}
 }
