@@ -64,8 +64,9 @@ function normalizeProjectSaveName(projectName?: string | null) {
     return null;
   }
 
+  const acceptedExtensions = [PROJECT_FILE_EXTENSION, ...LEGACY_PROJECT_FILE_EXTENSIONS].join("|");
   const withoutExtension = trimmedName.replace(
-    new RegExp(`\\.${PROJECT_FILE_EXTENSION}$`, "i"),
+    new RegExp(`\\.(${acceptedExtensions})$`, "i"),
     "",
   );
   const withoutInvalidFilesystemChars = withoutExtension.replace(/[<>:"/\\|?*]/g, "");

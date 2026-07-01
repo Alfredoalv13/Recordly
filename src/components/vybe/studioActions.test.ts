@@ -13,10 +13,10 @@ function createApi() {
 		openVideoFilePicker: vi.fn().mockResolvedValue({ success: true, path: "/tmp/capture.mp4" }),
 		setCurrentVideoPath: vi.fn().mockResolvedValue({ success: true }),
 		switchToEditor: vi.fn().mockResolvedValue(undefined),
-		loadProjectFile: vi.fn().mockResolvedValue({ success: true, path: "/tmp/demo.recordly" }),
+		loadProjectFile: vi.fn().mockResolvedValue({ success: true, path: "/tmp/demo.vybeclip" }),
 		openProjectFileAtPath: vi
 			.fn()
-			.mockResolvedValue({ success: true, path: "/tmp/demo.recordly" }),
+			.mockResolvedValue({ success: true, path: "/tmp/demo.vybeclip" }),
 	};
 }
 
@@ -61,8 +61,8 @@ describe("VybeClip Studio actions", () => {
 	it("opens a recent project by path", async () => {
 		const api = createApi();
 
-		await expect(openRecentStudioProject(api, "/tmp/recent.recordly")).resolves.toBe(true);
-		expect(api.openProjectFileAtPath).toHaveBeenCalledWith("/tmp/recent.recordly");
+		await expect(openRecentStudioProject(api, "/tmp/recent.vybeclip")).resolves.toBe(true);
+		expect(api.openProjectFileAtPath).toHaveBeenCalledWith("/tmp/recent.vybeclip");
 		expect(api.switchToEditor).toHaveBeenCalledOnce();
 	});
 });

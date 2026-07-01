@@ -151,6 +151,15 @@ describe("local media path policy", () => {
 		await expect(fs.readFile(thumbnailPath, "utf8")).resolves.toBe("png-thumbnail");
 	});
 
+	it("recognizes VybeClip projects and legacy Recordly/OpenScreen projects", async () => {
+		const { hasProjectFileExtension } = await import("./manager");
+
+		expect(hasProjectFileExtension("demo.vybeclip")).toBe(true);
+		expect(hasProjectFileExtension("demo.recordly")).toBe(true);
+		expect(hasProjectFileExtension("demo.openscreen")).toBe(true);
+		expect(hasProjectFileExtension("demo.json")).toBe(false);
+	});
+
 	it("loads project files that start with a UTF-8 byte order mark", async () => {
 		const videoPath = path.join(tempPath, "recording.mp4");
 		const projectPath = path.join(tempPath, "recording.recordly");

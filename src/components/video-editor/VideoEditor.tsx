@@ -1709,9 +1709,15 @@ export default function VideoEditor() {
 			currentProjectPath?.split(/[\\/]/).pop() ??
 			currentSourcePath?.split(/[\\/]/).pop() ??
 			"";
-		const withoutExtension = fileName.replace(/\.recordly$/i, "").replace(/\.[^.]+$/, "");
+		const withoutExtension = fileName
+			.replace(/\.(vybeclip|recordly|openscreen)$/i, "")
+			.replace(/\.[^.]+$/, "");
 		return withoutExtension || t("editor.project.untitled", "Untitled");
 	}, [currentProjectPath, currentSourcePath, t]);
+	const projectFileExtension = useMemo(() => {
+		const legacyExtension = currentProjectPath?.match(/\.(recordly|openscreen)$/i)?.[1];
+		return legacyExtension ? `.${legacyExtension.toLowerCase()}` : ".vybeclip";
+	}, [currentProjectPath]);
 
 	useEffect(() => {
 		if (!isEditingProjectName) {
@@ -5377,7 +5383,7 @@ export default function VideoEditor() {
 								aria-label={t("editor.project.renameInput", "Project name")}
 							/>
 							<span className="shrink-0 text-xs font-medium tracking-tight text-muted-foreground/70">
-								.recordly
+								{projectFileExtension}
 							</span>
 						</form>
 					) : (
@@ -5395,7 +5401,7 @@ export default function VideoEditor() {
 								{projectDisplayName}
 							</span>
 							<span className="shrink-0 text-xs font-medium tracking-tight text-muted-foreground/70">
-								.recordly
+								{projectFileExtension}
 							</span>
 						</button>
 					)}
