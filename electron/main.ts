@@ -203,8 +203,7 @@ let defaultTrayIcon: ReturnType<typeof getTrayIcon> | null = null;
 let recordingTrayIcon: ReturnType<typeof getTrayIcon> | null = null;
 
 function getPlatformAppIconFilename(size: 32 | 128 | 512) {
-	const baseName = process.platform === "darwin" ? "recordlymac" : "recordly";
-	return `app-icons/${baseName}-${size}.png`;
+	return `app-icons/vybeclip-${size}.png`;
 }
 
 function getDefaultTrayIcon() {

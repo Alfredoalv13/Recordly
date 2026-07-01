@@ -156,10 +156,9 @@ import { getDevOpenRecordingConfig, getSmokeExportConfig } from "./smokeExportCo
 import { createSmokeExportProgressSampler } from "./smokeExportProgress";
 import {
 	APP_HEADER_ICON_BUTTON_CLASS,
-	DiscordLinkButton,
 	FeedbackDialog,
 	openExternalLink,
-	RECORDLY_ISSUES_URL,
+	VYBECLIP_ISSUES_URL,
 } from "./TutorialHelp";
 import TimelineEditor, { type TimelineEditorHandle } from "./timeline/TimelineEditor";
 import {
@@ -3404,7 +3403,9 @@ export default function VideoEditor() {
 	const handlePreviewSkipBack = useCallback(() => {
 		const currentMs = timelinePlayheadTime * 1000;
 		const keyframes = timelineRef.current?.keyframes ?? [];
-		const previous = [...keyframes].reverse().find((keyframe) => keyframe.time < currentMs - 50);
+		const previous = [...keyframes]
+			.reverse()
+			.find((keyframe) => keyframe.time < currentMs - 50);
 		handleSeek(previous ? previous.time / 1000 : Math.max(0, timelinePlayheadTime - 5));
 	}, [handleSeek, timelinePlayheadTime]);
 
@@ -3412,9 +3413,7 @@ export default function VideoEditor() {
 		const currentMs = timelinePlayheadTime * 1000;
 		const keyframes = timelineRef.current?.keyframes ?? [];
 		const next = keyframes.find((keyframe) => keyframe.time > currentMs + 50);
-		handleSeek(
-			next ? next.time / 1000 : Math.min(timelineDuration, timelinePlayheadTime + 5),
-		);
+		handleSeek(next ? next.time / 1000 : Math.min(timelineDuration, timelinePlayheadTime + 5));
 	}, [handleSeek, timelineDuration, timelinePlayheadTime]);
 
 	const handleSelectZoom = useCallback((id: string | null) => {
@@ -5071,7 +5070,7 @@ export default function VideoEditor() {
 
 	const openLightningIssues = useCallback(async () => {
 		await openExternalLink(
-			RECORDLY_ISSUES_URL,
+			VYBECLIP_ISSUES_URL,
 			t("editor.feedback.openFailed", "Failed to open link."),
 		);
 	}, [t]);
@@ -5221,10 +5220,7 @@ export default function VideoEditor() {
 			volume={
 				audio.shouldMutePreviewVideo || audio.isCurrentClipMuted
 					? 0
-					: Math.max(
-							0,
-							Math.min(1, previewVolume * audio.embeddedSourcePreviewGain),
-						)
+					: Math.max(0, Math.min(1, previewVolume * audio.embeddedSourcePreviewGain))
 			}
 			suspendRendering={suspendRendering}
 		/>
@@ -5323,7 +5319,6 @@ export default function VideoEditor() {
 					>
 						<FolderOpen className="h-4 w-4" />
 					</Button>
-					<DiscordLinkButton />
 					<FeedbackDialog />
 					<div className="ml-1 h-5 w-px bg-foreground/10" />
 					<Button
@@ -5742,7 +5737,9 @@ export default function VideoEditor() {
 									onGifLoopChange={setGifLoop}
 									gifSizePreset={gifSizePreset}
 									onGifSizePresetChange={setGifSizePreset}
-									showCaptionSidecarOption={hasCaptionsForSidecar && exportFormat === "mp4"}
+									showCaptionSidecarOption={
+										hasCaptionsForSidecar && exportFormat === "mp4"
+									}
 									includeCaptionSidecar={includeCaptionSidecar}
 									onIncludeCaptionSidecarChange={setIncludeCaptionSidecar}
 									mp4OutputDimensions={mp4OutputDimensions}
