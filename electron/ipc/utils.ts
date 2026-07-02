@@ -7,6 +7,7 @@ import { RECORDINGS_DIR } from "../appPaths";
 import { AUTO_RECORDING_PREFIX, RECORDINGS_SETTINGS_FILE } from "./constants";
 import {
 	approvedLocalReadPaths,
+	approvedWhisperExecutablePaths,
 	customRecordingsDir,
 	recordingsDirLoaded,
 	setCustomRecordingsDir,
@@ -130,3 +131,20 @@ export function approveUserPath(filePath: string | null | undefined): void {
 	}
 }
 
+export function approveWhisperExecutablePath(filePath: string | null | undefined): void {
+	if (!filePath) return;
+	try {
+		approvedWhisperExecutablePaths.add(path.resolve(filePath));
+	} catch {
+		// Ignore invalid paths; later reads will surface the underlying error.
+	}
+}
+
+export function isApprovedWhisperExecutablePath(filePath?: string | null): boolean {
+	if (!filePath) return false;
+	try {
+		return approvedWhisperExecutablePaths.has(path.resolve(filePath));
+	} catch {
+		return false;
+	}
+}

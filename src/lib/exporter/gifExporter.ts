@@ -316,7 +316,7 @@ export class GifExporter {
 			}
 
 			// Render the GIF
-			const blob = await new Promise<Blob>((resolve, _reject) => {
+			const blob = await new Promise<Blob>((resolve, reject) => {
 				this.gif!.on("finished", (blob: Blob) => {
 					resolve(blob);
 				});
@@ -336,7 +336,24 @@ export class GifExporter {
 					}
 				});
 
-				// gif.js doesn't have a typed 'error' event, but we can catch errors in the try/catch
+				// gif.js's TypeScript definitions don't declare an 'error' event, but the
+				// underlying EventEmitter can still emit one (e.g. worker errors), and
+				// gif.js can also emit 'abort'. Wire both up so failures reject the
+				// promise instead of leaving the export hanging forever.
+				this.gif!.on("abort", () => {
+					reject(new Error("GIF rendering was aborted"));
+				});
+				(this.gif as unknown as { on(event: "error", listener: (err: unknown) => void): void }).on(
+					"error",
+					(err: unknown) => {
+						reject(
+							new Error(
+								`GIF rendering failed: ${err instanceof Error ? err.message : String(err)}`,
+							),
+						);
+					},
+				);
+
 				this.gif!.render();
 			});
 

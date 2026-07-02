@@ -5,17 +5,36 @@ import { pathToFileURL } from "node:url";
 import { ipcMain } from "electron";
 import { USER_DATA_PATH } from "../../appPaths";
 import { normalizePath } from "../utils";
-import { getAssetRootPath } from "../project/manager";
+import { getAssetRootPath, isAllowedLocalReadPath } from "../project/manager";
 
 export function registerAssetHandlers() {
+  // Confines reads to app-managed directories (bundled asset root, recordings
+  // dir, userData, temp) or paths the app has explicitly approved (e.g. a file
+  // chosen via a native dialog.showOpenDialog result, tracked server-side via
+  // approveUserPath/rememberApprovedLocalReadPath). This mirrors the allowlist
+  // used for the loopback media server and native exports so a compromised
+  // renderer cannot use these handlers to read arbitrary files on disk (SSH
+  // keys, config files with secrets, etc). Both the lexical and the
+  // canonicalized (realpath) form must satisfy the policy so a symlink placed
+  // under an allowed prefix cannot smuggle in a target outside it.
   async function resolveReadableLocalFilePath(filePath: string) {
     const normalizedPath = normalizePath(filePath)
+    if (!isAllowedLocalReadPath(normalizedPath)) {
+      throw new Error('Path is not approved for local reads')
+    }
+
     const resolvedPath = await fs.realpath(normalizedPath).catch(() => normalizedPath)
     const stats = await fs.stat(resolvedPath)
     if (!stats.isFile()) {
       throw new Error('Path is not a readable file')
     }
-    return normalizePath(resolvedPath)
+
+    const canonicalPath = normalizePath(resolvedPath)
+    if (!isAllowedLocalReadPath(canonicalPath)) {
+      throw new Error('Path is not approved for local reads')
+    }
+
+    return canonicalPath
   }
 
   // Generate a tiny thumbnail for a wallpaper image and cache it in userData.
@@ -67,7 +86,8 @@ export function registerAssetHandlers() {
 
       return { success: true, data: jpegData! }
     } catch (error) {
-      return { success: false, error: String(error) }
+      console.error('Failed to generate wallpaper thumbnail:', error)
+      return { success: false, error: 'Failed to generate thumbnail' }
     }
   })
 
@@ -103,24 +123,24 @@ export function registerAssetHandlers() {
       return { success: true, files }
     } catch (error) {
       console.error('Failed to list asset directory:', error)
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to list asset directory' }
     }
   })
 
   ipcMain.handle('read-local-file', async (_, filePath: string) => {
     try {
-      // Intentionally more permissive than the media-server allowlist: this IPC
-      // is used for direct renderer-side local file reads after the app has
-      // already accepted a path, while URL-based media serving must stay scoped
-      // to approved/app-managed locations. We still canonicalize the path and
-      // require a real on-disk file so this cannot be used to read directories.
+      // Uses the same allowlist as the media server and native exports: the
+      // bundled asset root, recordings dir, userData, temp dir, or a path the
+      // app has explicitly approved (e.g. the result of a dialog.showOpenDialog
+      // call). An arbitrary string supplied by a compromised renderer that
+      // isn't one of those is rejected here.
       const resolved = await resolveReadableLocalFilePath(filePath)
 
       const data = await fs.readFile(resolved)
       return { success: true, data }
     } catch (error) {
       console.error('Failed to read local file:', error)
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to read local file' }
     }
   })
 

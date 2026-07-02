@@ -74,6 +74,6 @@ Issues and MVP feedback are tracked in the [GitHub issue tracker](https://github
 
 ## License And Attribution
 
-VybeClip is licensed under the [GNU Affero General Public License v3.0](./LICENSE).
+VybeClip is licensed under the [GNU Affero General Public License v3.0](./LICENSE.md).
 
 VybeClip is based on [Recordly](https://github.com/webadderallorg/Recordly), which originated as a fork of [OpenScreen](https://github.com/siddharthvaddem/openscreen). Their work remains an important part of this codebase and is preserved under the project license and Git history.

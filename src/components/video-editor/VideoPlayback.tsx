@@ -525,6 +525,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			height: number;
 		} | null>(null);
 		const captionBoxRef = useRef<HTMLDivElement | null>(null);
+		const captionClipPathFrameRef = useRef<number | null>(null);
+		const captionClipPathSignatureRef = useRef<string | null>(null);
 		const currentTimeRef = useRef(0);
 		const zoomRegionsRef = useRef<ZoomRegion[]>([]);
 		const selectedZoomIdRef = useRef<string | null>(null);
@@ -736,10 +738,20 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					captionBox.style.clipPath = "";
 					captionBox.style.removeProperty("-webkit-clip-path");
 				}
+				captionClipPathSignatureRef.current = null;
+				return;
+			}
+
+			// Coalesce recomputation triggers that land within the same animation
+			// frame (e.g. rapid caption-layout updates during active editing) by
+			// only ever scheduling one pending RAF at a time.
+			if (captionClipPathFrameRef.current !== null) {
 				return;
 			}
 
 			const frame = requestAnimationFrame(() => {
+				captionClipPathFrameRef.current = null;
+
 				const width = captionBox.offsetWidth;
 				const height = captionBox.offsetHeight;
 				if (width <= 0 || height <= 0) {
@@ -751,19 +763,36 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					overlayRef.current?.clientWidth || 960,
 					autoCaptionSettings.maxWidth,
 				);
+				const radius = getCaptionScaledRadius(autoCaptionSettings.boxRadius, fontSize);
+
+				// Skip recomputing (and rewriting) the clip-path when the geometry
+				// that actually determines the squircle path hasn't changed since
+				// the last computation, avoiding redundant path string generation
+				// and style writes on every caption-layout change.
+				const signature = `${width}x${height}x${radius}`;
+				if (captionClipPathSignatureRef.current === signature) {
+					return;
+				}
+				captionClipPathSignatureRef.current = signature;
 
 				const squirclePath = getSquircleSvgPath({
 					x: 0,
 					y: 0,
 					width,
 					height,
-					radius: getCaptionScaledRadius(autoCaptionSettings.boxRadius, fontSize),
+					radius,
 				});
 				captionBox.style.clipPath = `path('${squirclePath}')`;
 				captionBox.style.setProperty("-webkit-clip-path", `path('${squirclePath}')`);
 			});
+			captionClipPathFrameRef.current = frame;
 
-			return () => cancelAnimationFrame(frame);
+			return () => {
+				if (captionClipPathFrameRef.current === frame) {
+					cancelAnimationFrame(frame);
+					captionClipPathFrameRef.current = null;
+				}
+			};
 		}, [activeCaptionLayout, autoCaptionSettings]);
 		const motionBlurStateRef = useRef<MotionBlurState>(createMotionBlurState());
 		const webcamEnabled = webcam?.enabled ?? false;

@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import type {
 	AnnotationRegion,
 	AudioRegion,
@@ -287,6 +288,7 @@ type NativeStaticLayoutZoomSample = {
 };
 
 const NATIVE_EXPORT_ENGINE_NAME = "Breeze";
+const NATIVE_STATIC_LAYOUT_FALLBACK_TOAST_ID = "native-static-layout-export-fallback";
 const READABLE_SOURCE_RETRY_ERROR_TOKENS = [
 	"readavpacket",
 	"get_media_info",
@@ -2603,6 +2605,10 @@ export class ModernVideoExporter {
 			console.warn("[VideoExporter] Native static layout export failed; falling back", error);
 			this.nativeStaticLayoutSkipReason = "native-static-runtime-failed";
 			this.nativeStaticLayoutSkipReasons = [this.nativeStaticLayoutSkipReason];
+			toast.warning(
+				"Hardware-accelerated export isn't available right now, so this export will use the standard (slower) path instead.",
+				{ id: NATIVE_STATIC_LAYOUT_FALLBACK_TOAST_ID, duration: 8000 },
+			);
 			restoreEncoderState();
 			return null;
 		} finally {

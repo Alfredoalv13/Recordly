@@ -155,6 +155,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { getDevOpenRecordingConfig, getSmokeExportConfig } from "./smokeExportConfig";
 import { createSmokeExportProgressSampler } from "./smokeExportProgress";
 import {
+	AboutDialog,
 	APP_HEADER_ICON_BUTTON_CLASS,
 	FeedbackDialog,
 	openExternalLink,
@@ -1035,16 +1036,37 @@ export default function VideoEditor() {
 		}
 	}, [handleSaveEditorPreset, presetNameDraft]);
 
+	const discardExportedTempWithWarning = useCallback((tempFilePath: string) => {
+		// Best-effort cleanup — main-process also reaps stale temp files on
+		// before-quit, but we still log failures (both rejected promises and
+		// resolved { success: false } results) so an orphaned multi-GB temp
+		// file is discoverable instead of silently consuming disk space.
+		void window.electronAPI.discardExportedTemp
+			?.(tempFilePath)
+			?.then((result) => {
+				if (!result?.success) {
+					console.warn(
+						`Failed to discard exported temp file at ${tempFilePath}:`,
+						result?.error ?? "unknown error",
+					);
+				}
+			})
+			.catch((discardError) => {
+				console.warn(
+					`Failed to discard exported temp file at ${tempFilePath}:`,
+					discardError,
+				);
+			});
+	}, []);
+
 	const clearPendingExportSave = useCallback(() => {
 		const pending = pendingExportSaveRef.current;
 		pendingExportSaveRef.current = null;
 		setHasPendingExportSave(false);
 		if (pending?.tempFilePath && typeof window !== "undefined") {
-			// Best-effort cleanup — main-process also reaps stale temp files on
-			// before-quit, so we ignore failures here.
-			void window.electronAPI.discardExportedTemp?.(pending.tempFilePath);
+			discardExportedTempWithWarning(pending.tempFilePath);
 		}
-	}, []);
+	}, [discardExportedTempWithWarning]);
 
 	const refreshProjectLibrary = useCallback(async () => {
 		try {
@@ -1410,7 +1432,7 @@ export default function VideoEditor() {
 			const pending = pendingExportSaveRef.current;
 			pendingExportSaveRef.current = null;
 			if (pending?.tempFilePath && typeof window !== "undefined") {
-				void window.electronAPI.discardExportedTemp?.(pending.tempFilePath);
+				discardExportedTempWithWarning(pending.tempFilePath);
 			}
 			if (pendingTelemetryRetryTimeoutRef.current !== null) {
 				window.clearTimeout(pendingTelemetryRetryTimeoutRef.current);
@@ -5320,6 +5342,7 @@ export default function VideoEditor() {
 						<FolderOpen className="h-4 w-4" />
 					</Button>
 					<FeedbackDialog />
+					<AboutDialog />
 					<div className="ml-1 h-5 w-px bg-foreground/10" />
 					<Button
 						type="button"

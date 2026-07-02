@@ -13,6 +13,7 @@ import {
 	getProjectsDir,
   getProjectThumbnailPath,
 	isPathInsideDirectory,
+	isTrustedOpenableProjectPath,
 	isTrustedProjectPath,
 	listProjectLibraryEntries,
 	loadProjectFromPath,
@@ -227,7 +228,7 @@ export function registerProjectHandlers() {
         return { success: true, message: 'Could not reveal item, but opened directory.' };
       } catch (openError) {
         console.error(`Error opening directory: ${path.dirname(filePath)}`, openError);
-        return { success: false, error: String(error) };
+        return { success: false, error: 'Failed to reveal item in folder' };
       }
     }
   });
@@ -243,7 +244,7 @@ export function registerProjectHandlers() {
       return { success: true };
     } catch (error) {
       console.error('Failed to open recordings folder:', error);
-      return { success: false, error: String(error), message: 'Failed to open recordings folder.' };
+      return { success: false, error: 'Failed to open recordings folder', message: 'Failed to open recordings folder.' };
     }
   });
 
@@ -285,7 +286,8 @@ export function registerProjectHandlers() {
 
       return { success: true, path: selectedPath, isDefault: selectedPath === RECORDINGS_DIR }
     } catch (error) {
-      return { success: false, error: String(error), message: 'Failed to set recordings folder' }
+      console.error('Failed to set recordings folder:', error);
+      return { success: false, error: 'Failed to set recordings folder', message: 'Failed to set recordings folder' }
     }
   })
 
@@ -509,6 +511,15 @@ export function registerProjectHandlers() {
 
   ipcMain.handle('open-project-file-at-path', async (_, filePath: string) => {
     try {
+      if (!(await isTrustedOpenableProjectPath(filePath))) {
+        console.warn(`[open-project-file-at-path] Blocked untrusted path: ${filePath}`)
+        return {
+          success: false,
+          message: 'Failed to open project file',
+          error: 'Project path is not in an allowed location',
+        }
+      }
+
       return await loadProjectFromPath(filePath)
     } catch (error) {
       console.error('Failed to open project file at path:', error)

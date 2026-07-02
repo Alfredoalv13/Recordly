@@ -7,7 +7,7 @@ import {
 	sendWhisperModelDownloadProgress,
 } from "../captions/whisper";
 import { generateAutoCaptionsFromVideo } from "../captions/generate";
-import { approveUserPath, getRecordingsDir } from "../utils";
+import { approveUserPath, approveWhisperExecutablePath, getRecordingsDir } from "../utils";
 
 export function registerCaptionHandlers() {
   ipcMain.handle('open-video-file-picker', async () => {
@@ -89,6 +89,9 @@ export function registerCaptionHandlers() {
       }
 
       approveUserPath(result.filePaths[0])
+      // Only a path the user explicitly picked in this dialog is trusted for
+      // execFileAsync in generate-auto-captions; see approvedWhisperExecutablePaths.
+      approveWhisperExecutablePath(result.filePaths[0])
       return { success: true, path: result.filePaths[0] }
     } catch (error) {
       console.error('Failed to open Whisper executable picker:', error)
@@ -143,7 +146,7 @@ export function registerCaptionHandlers() {
       return { success: true, path: modelPath }
     } catch (error) {
       console.error('Failed to download Whisper small model:', error)
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to download Whisper model' }
     }
   })
 
@@ -173,9 +176,9 @@ export function registerCaptionHandlers() {
         status: 'error',
         progress: 0,
         path: null,
-        error: String(error),
+        error: 'Failed to delete Whisper model',
       })
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to delete Whisper model' }
     }
   })
 
@@ -198,7 +201,7 @@ export function registerCaptionHandlers() {
       console.error('Failed to generate auto captions:', error)
       return {
         success: false,
-        error: String(error),
+        error: 'Failed to generate auto captions',
         message: 'Failed to generate auto captions',
       }
     }

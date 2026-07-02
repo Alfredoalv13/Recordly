@@ -71,7 +71,16 @@ export function registerExtensionIpcHandlers(): void {
 		return setExtensionStatus(id, "disabled");
 	});
 
-	// Install an extension from a folder picker
+	// Install an extension from a folder picker.
+	//
+	// Security: this handler intentionally takes no renderer-supplied path
+	// argument. The only path ever passed to installExtensionFromPath() is
+	// the one the OS-native dialog.showOpenDialog() call below returns —
+	// mirroring the whisper-executable-picker pattern in
+	// electron/ipc/register/captions.ts (approveWhisperExecutablePath). A
+	// compromised renderer cannot invoke this with an attacker-controlled
+	// path because there is nothing for it to supply: do not add a `path`
+	// parameter to this handler.
 	ipcMain.handle("extensions:install-from-folder", async (event) => {
 		const window = BrowserWindow.fromWebContents(event.sender);
 		const result = await dialog.showOpenDialog(window!, {
@@ -84,7 +93,9 @@ export function registerExtensionIpcHandlers(): void {
 			return { success: false, reason: "cancelled" };
 		}
 
-		const info = await installExtensionFromPath(result.filePaths[0]);
+		// Only the path returned by the dialog above is ever trusted here.
+		const dialogSelectedPath = result.filePaths[0];
+		const info = await installExtensionFromPath(dialogSelectedPath);
 		if (!info) {
 			return {
 				success: false,

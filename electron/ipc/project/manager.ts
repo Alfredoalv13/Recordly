@@ -469,3 +469,69 @@ export function isTrustedProjectPath(filePath?: string | null): boolean {
 	if (!filePath || !currentProjectPath) return false;
 	return normalizePath(filePath) === normalizePath(currentProjectPath);
 }
+
+/**
+ * Confines project-open requests to locations the app itself considers safe:
+ * the managed projects directory, a path the app has already recorded in the
+ * recent-projects list (which is only ever populated via trusted dialog-
+ * driven save/load flows, never from an arbitrary renderer-supplied string),
+ * or the project fixture path the *main process* (not the renderer) launched
+ * the editor window with for an automated smoke export
+ * (RECORDLY_SMOKE_EXPORT_PROJECT, gated behind RECORDLY_SMOKE_EXPORT=1). That
+ * env var is only ever set by whoever spawns the Electron process for local/
+ * CI smoke testing and is read once here directly from process.env, so it
+ * cannot be influenced by a compromised renderer the way an arbitrary
+ * `open-project-file-at-path` argument could be. Smoke-export fixtures
+ * intentionally live outside the managed projects directory (e.g. a CI temp
+ * dir), so folding them into the projects-dir/recent-projects allowlist would
+ * either require copying fixtures into app-managed storage (fragile for CI)
+ * or widening the allowlist to arbitrary paths (defeats the fix); trusting
+ * only this exact, main-process-controlled path preserves the security intent
+ * while keeping the smoke-export dev/CI flow working.
+ * This mirrors isAllowedLocalReadPath's canonicalization so a symlink cannot
+ * be used to smuggle in a path outside these locations.
+ */
+export async function isTrustedOpenableProjectPath(filePath?: string | null): Promise<boolean> {
+	if (!filePath || typeof filePath !== "string" || !filePath.trim()) {
+		return false;
+	}
+
+	if (!hasProjectFileExtension(filePath)) {
+		return false;
+	}
+
+	const normalizedCandidatePath = normalizePath(filePath);
+	const projectsDir = await getProjectsDir();
+	const recentProjectPaths = await loadRecentProjectPaths();
+	const trustedPaths = [projectsDir, ...recentProjectPaths];
+	if (process.env.RECORDLY_SMOKE_EXPORT === "1" && process.env.RECORDLY_SMOKE_EXPORT_PROJECT) {
+		trustedPaths.push(process.env.RECORDLY_SMOKE_EXPORT_PROJECT);
+	}
+	const trustedLexicalPaths = new Set(trustedPaths.map((value) => normalizePath(value)));
+
+	const isLexicallyTrusted =
+		isPathInsideDirectory(normalizedCandidatePath, normalizePath(projectsDir)) ||
+		trustedLexicalPaths.has(normalizedCandidatePath);
+	if (!isLexicallyTrusted) {
+		return false;
+	}
+
+	// Canonicalize to guard against a symlink under a trusted location that
+	// resolves outside of it.
+	let canonicalCandidatePath = normalizedCandidatePath;
+	try {
+		canonicalCandidatePath = normalizePath(realpathSync(normalizedCandidatePath));
+	} catch {
+		// File may not exist yet / cannot be resolved; the lexical check above
+		// already constrained it, so fall through with the lexical path.
+	}
+
+	if (canonicalCandidatePath === normalizedCandidatePath) {
+		return true;
+	}
+
+	return (
+		isPathInsideDirectory(canonicalCandidatePath, normalizePath(projectsDir)) ||
+		trustedLexicalPaths.has(canonicalCandidatePath)
+	);
+}

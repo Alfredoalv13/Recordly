@@ -26,7 +26,28 @@ import type {
 	RenderHookPhase,
 } from "./types";
 
-const EXTENSION_SETTINGS_STORAGE_KEY = "recordly.extension-settings.v1";
+// Legacy (pre-namespacing) storage key. All extensions' settings used to be
+// stored together, in plaintext, under this single key — which meant any
+// extension could read every other extension's settings via raw
+// `window.localStorage` access (extensions run via dynamic import() in the
+// same main world, so raw localStorage is directly reachable, bypassing the
+// host API's per-extension scoping entirely). Kept around only so
+// `migrateLegacySharedSettingsStore()` can copy already-installed extensions'
+// settings forward into their own namespaced keys.
+const LEGACY_SHARED_EXTENSION_SETTINGS_STORAGE_KEY = "recordly.extension-settings.v1";
+
+// Each extension now gets its own namespaced localStorage key, e.g.
+// "recordly.extension-settings.v1:my-extension-id". This prevents one
+// extension from reading another's persisted settings via raw localStorage
+// access — the host API already scoped access correctly, but raw
+// `window.localStorage` access did not.
+const EXTENSION_SETTINGS_STORAGE_KEY_PREFIX = "recordly.extension-settings.v1:";
+
+const LEGACY_SETTINGS_MIGRATION_FLAG_KEY = "recordly.extension-settings.v1.migrated";
+
+function getNamespacedExtensionSettingsKey(extensionId: string): string {
+	return `${EXTENSION_SETTINGS_STORAGE_KEY_PREFIX}${extensionId}`;
+}
 
 // ---------------------------------------------------------------------------
 // Security: Hide electronAPI from extension code
@@ -144,7 +165,6 @@ export class ExtensionHost {
 		Set<(settingId: string, value: unknown) => void>
 	>();
 	private listeners = new Set<() => void>();
-	private fullSettingsStore: Record<string, Record<string, unknown>> | null = null;
 	private persistTimeout: ReturnType<typeof setTimeout> | null = null;
 	private iconPathCache = new Map<string, Path2D>();
 
@@ -552,13 +572,63 @@ export class ExtensionHost {
 		}
 	}
 
-	private readPersistedSettingsStore(): Record<string, Record<string, unknown>> {
+	/**
+	 * One-time, best-effort migration: copies each extension's settings out of
+	 * the old shared plaintext key into its own namespaced key, so
+	 * already-installed extensions don't silently lose their settings when
+	 * this per-extension scoping was introduced. Safe to call multiple times;
+	 * it no-ops once a flag has been recorded, and it never overwrites a
+	 * namespaced key that already has data.
+	 */
+	private migrateLegacySharedSettingsStore(): void {
+		if (typeof window === "undefined" || !window.localStorage) {
+			return;
+		}
+
+		try {
+			if (window.localStorage.getItem(LEGACY_SETTINGS_MIGRATION_FLAG_KEY)) {
+				return;
+			}
+
+			const raw = window.localStorage.getItem(LEGACY_SHARED_EXTENSION_SETTINGS_STORAGE_KEY);
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+					for (const [extensionId, settings] of Object.entries(
+						parsed as Record<string, unknown>,
+					)) {
+						if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+							continue;
+						}
+
+						const namespacedKey = getNamespacedExtensionSettingsKey(extensionId);
+						// Don't clobber anything already migrated/written under the new key.
+						if (window.localStorage.getItem(namespacedKey) != null) {
+							continue;
+						}
+
+						window.localStorage.setItem(namespacedKey, JSON.stringify(settings));
+					}
+				}
+			}
+
+			// Leave the legacy key in place (in case of bugs in this migration) but
+			// record that migration ran, so we don't redo it on every load.
+			window.localStorage.setItem(LEGACY_SETTINGS_MIGRATION_FLAG_KEY, "1");
+		} catch {
+			// Best-effort — if anything goes wrong, just skip migration.
+		}
+	}
+
+	private readPersistedExtensionSettings(extensionId: string): Record<string, unknown> {
 		if (typeof window === "undefined" || !window.localStorage) {
 			return {};
 		}
 
+		this.migrateLegacySharedSettingsStore();
+
 		try {
-			const raw = window.localStorage.getItem(EXTENSION_SETTINGS_STORAGE_KEY);
+			const raw = window.localStorage.getItem(getNamespacedExtensionSettingsKey(extensionId));
 			if (!raw) {
 				return {};
 			}
@@ -568,30 +638,30 @@ export class ExtensionHost {
 				return {};
 			}
 
-			return parsed as Record<string, Record<string, unknown>>;
+			return parsed as Record<string, unknown>;
 		} catch {
 			return {};
 		}
 	}
 
-	private writePersistedSettingsStore(store: Record<string, Record<string, unknown>>): void {
+	private writePersistedExtensionSettings(
+		extensionId: string,
+		settings: Record<string, unknown>,
+	): void {
 		if (typeof window === "undefined" || !window.localStorage) {
 			return;
 		}
 
 		try {
-			window.localStorage.setItem(EXTENSION_SETTINGS_STORAGE_KEY, JSON.stringify(store));
+			const key = getNamespacedExtensionSettingsKey(extensionId);
+			if (Object.keys(settings).length === 0) {
+				window.localStorage.removeItem(key);
+			} else {
+				window.localStorage.setItem(key, JSON.stringify(settings));
+			}
 		} catch {
 			// Ignore storage quota / privacy mode failures.
 		}
-	}
-
-	private getFullSettingsStore(): Record<string, Record<string, unknown>> {
-		if (this.fullSettingsStore) {
-			return this.fullSettingsStore;
-		}
-		this.fullSettingsStore = this.readPersistedSettingsStore();
-		return this.fullSettingsStore;
 	}
 
 	private ensureExtensionSettingsLoaded(extensionId: string): void {
@@ -599,32 +669,20 @@ export class ExtensionHost {
 			return;
 		}
 
-		const store = this.getFullSettingsStore();
-		const persisted = store[extensionId];
-		const normalized =
-			persisted && typeof persisted === "object" && !Array.isArray(persisted)
-				? { ...persisted }
-				: {};
-
-		this.extensionSettings.set(extensionId, normalized);
+		const persisted = this.readPersistedExtensionSettings(extensionId);
+		this.extensionSettings.set(extensionId, { ...persisted });
 	}
 
 	private persistExtensionSettings(extensionId: string): void {
-		const store = this.getFullSettingsStore();
-		const settings = this.extensionSettings.get(extensionId) ?? {};
-
-		if (Object.keys(settings).length === 0) {
-			delete store[extensionId];
-		} else {
-			store[extensionId] = { ...settings };
-		}
-
 		// Debounce the actual write to localStorage to avoid blocking the UI thread during rapid changes
 		if (this.persistTimeout) {
 			clearTimeout(this.persistTimeout);
 		}
 		this.persistTimeout = setTimeout(() => {
-			this.writePersistedSettingsStore(store);
+			this.writePersistedExtensionSettings(
+				extensionId,
+				this.extensionSettings.get(extensionId) ?? {},
+			);
 			this.persistTimeout = null;
 		}, 500);
 	}
@@ -634,7 +692,9 @@ export class ExtensionHost {
 			clearTimeout(this.persistTimeout);
 			this.persistTimeout = null;
 		}
-		this.writePersistedSettingsStore(this.getFullSettingsStore());
+		for (const [extensionId, settings] of this.extensionSettings.entries()) {
+			this.writePersistedExtensionSettings(extensionId, settings);
+		}
 	}
 
 	/**

@@ -29,6 +29,30 @@ const MARKETPLACE_API_BASE = "https://marketplace.recordly.dev/extensions/api/v1
 const REQUEST_TIMEOUT_MS = 15_000;
 
 // ---------------------------------------------------------------------------
+// Testing-phase gate
+//
+// Remote marketplace installation is disabled for now: the marketplace has
+// only an origin allowlist (no checksum/signature verification) and
+// extension code loads directly into the main renderer with full
+// window/document/fetch/WebSocket access. Until a real trust model
+// (signing + a sandboxed execution context) is in place, installing
+// extensions from the network is blocked here — locally bundled/first-party
+// extensions and "install from folder" (native dialog only) are unaffected.
+// ---------------------------------------------------------------------------
+
+const REMOTE_INSTALL_DISABLED_MESSAGE =
+	"Installing extensions from the marketplace is temporarily disabled during the testing phase. Locally bundled extensions continue to work normally.";
+
+/**
+ * Whether downloading and installing extensions from the remote marketplace
+ * is currently permitted. Kept as a single toggle so it can be flipped back
+ * on later once signing/verification lands — defaults to disabled.
+ */
+export function isRemoteMarketplaceInstallEnabled(): boolean {
+	return process.env.RECORDLY_ENABLE_MARKETPLACE_INSTALL === "1";
+}
+
+// ---------------------------------------------------------------------------
 // Zip-slip protection: recursively verify all extracted files stay within the
 // expected directory. Rejects symlinks that point outside and any entry whose
 // real path escapes the root.
@@ -166,6 +190,14 @@ export async function downloadAndInstallExtension(
 	extensionId: string,
 	downloadUrl: string,
 ): Promise<{ success: boolean; error?: string }> {
+	// Testing-phase gate: remote/network extension installs are disabled
+	// until the marketplace has real checksum/signature verification and
+	// extension code runs in a sandboxed context. See
+	// isRemoteMarketplaceInstallEnabled() above.
+	if (!isRemoteMarketplaceInstallEnabled()) {
+		return { success: false, error: REMOTE_INSTALL_DISABLED_MESSAGE };
+	}
+
 	// Validate download URL against allowed marketplace origins
 	const allowedOrigins = [
 		"https://marketplace.recordly.dev",
@@ -179,6 +211,28 @@ export async function downloadAndInstallExtension(
 		}
 	} catch {
 		return { success: false, error: "Invalid download URL" };
+	}
+
+	// Defense in depth: never install an extension whose marketplace review
+	// status isn't "approved", even if the remote-install gate above is
+	// later re-enabled. This protects against a compromised/mocked
+	// marketplace response, or a stale downloadUrl for an extension that
+	// was flagged/rejected after the caller fetched its listing.
+	// getMarketplaceExtension() already catches its own errors and returns
+	// null on any failure (network error, deleted extension, non-200), so
+	// treat "couldn't verify" as fail-closed rather than silently proceeding.
+	const listing = await getMarketplaceExtension(extensionId);
+	if (!listing) {
+		return {
+			success: false,
+			error: "Unable to verify extension review status; refusing to install.",
+		};
+	}
+	if (listing.reviewStatus !== "approved") {
+		return {
+			success: false,
+			error: `Extension is not approved for installation (review status: ${listing.reviewStatus})`,
+		};
 	}
 
 	const tempDir = path.join(app.getPath("temp"), `recordly-ext-${extensionId}-${Date.now()}`);

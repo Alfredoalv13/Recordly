@@ -20,7 +20,10 @@
 	"status": {
 		"enabled": "Enabled",
 		"disabled": "Disabled",
-		"installed": "Installed"
+		"installed": "Installed",
+		"comingSoon": "Coming soon",
+		"comingSoonFull": "Installing is coming soon",
+		"installDisabledHint": "Marketplace installs are disabled during the beta"
 	},
 	"detail": {
 		"by": "By {{author}}",
@@ -45,6 +48,9 @@
 		"noMarketplace": "No marketplace extensions available yet",
 		"count": "{{count}} extension",
 		"countPlural": "{{count}} extensions"
+	},
+	"browse": {
+		"installDisabledNotice": "Installing extensions from the marketplace is temporarily disabled during the testing phase. You can still browse what's available — installing is coming soon. Locally bundled extensions keep working normally."
 	},
 	"toast": {
 		"installedAndEnabled": "Extension installed and enabled",

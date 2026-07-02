@@ -49,7 +49,7 @@ Areas where help is especially valuable:
 
 ## Reporting Issues
 
-If you encounter a bug or have a feature request, please open an issue in the [Issues](https://github.com/webadderallorg/Recordly/issues) section of this repository. Provide as much detail as possible to help us address the issue effectively.
+If you encounter a bug or have a feature request, please open an issue in the [Issues](https://github.com/Alfredoalv13/Recordly/issues) section of this repository. Provide as much detail as possible to help us address the issue effectively.
 
 ## Style Guide
 
@@ -58,6 +58,6 @@ If you encounter a bug or have a feature request, please open an issue in the [I
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the [MIT License](./LICENSE).
+By contributing to this project, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](./LICENSE.md), matching the project's actual license (this repo is an AGPLv3 fork of Recordly; it is not MIT-licensed).
 
 Thank you for your contributions!

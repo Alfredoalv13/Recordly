@@ -135,7 +135,7 @@ export function registerSettingsHandlers() {
 			return { success: true };
 		} catch (error) {
 			console.error("Failed to save shortcuts:", error);
-			return { success: false, error: String(error) };
+			return { success: false, error: "Failed to save shortcuts" };
 		}
 	});
 
@@ -196,7 +196,7 @@ export function registerSettingsHandlers() {
 				return { success: true };
 			} catch (error) {
 				console.error("Failed to save recording preferences:", error);
-				return { success: false, error: String(error) };
+				return { success: false, error: "Failed to save recording preferences" };
 			}
 		},
 	);
@@ -221,7 +221,7 @@ export function registerSettingsHandlers() {
 			return { success: true };
 		} catch (error) {
 			console.error("Failed to save countdown delay:", error);
-			return { success: false, error: String(error) };
+			return { success: false, error: "Failed to save countdown delay" };
 		}
 	});
 
