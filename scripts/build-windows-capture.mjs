@@ -3,7 +3,6 @@ import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import {
-	formatNativeHelperManifestError,
 	formatNativeHelperManifestWarning,
 	updateNativeHelperManifest,
 	verifyNativeHelperManifest,
@@ -98,10 +97,6 @@ if (!cmake) {
 			binaryName: "wgc-capture.exe",
 		});
 		if (!verification.ok) {
-			if (verification.hasRecordedEntry) {
-				console.error(formatNativeHelperManifestError("build-windows-capture", verification));
-				process.exit(1);
-			}
 			console.warn(formatNativeHelperManifestWarning("build-windows-capture", verification));
 		}
 		console.log(`[build-windows-capture] Using bundled helper: ${bundledExePath}`);

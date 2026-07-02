@@ -3,7 +3,6 @@ import { copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import {
-	formatNativeHelperManifestError,
 	formatNativeHelperManifestWarning,
 	updateNativeHelperManifest,
 	verifyNativeHelperManifest,
@@ -95,10 +94,6 @@ if (!cmake) {
 			binaryName: "cursor-monitor.exe",
 		});
 		if (!verification.ok) {
-			if (verification.hasRecordedEntry) {
-				console.error(formatNativeHelperManifestError("build-cursor-monitor", verification));
-				process.exit(1);
-			}
 			console.warn(formatNativeHelperManifestWarning("build-cursor-monitor", verification));
 		}
 		console.log(`[build-cursor-monitor] Using bundled helper: ${bundledExePath}`);

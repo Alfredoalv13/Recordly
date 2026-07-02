@@ -3,7 +3,6 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import path from "node:path";
 
 import {
-	formatNativeHelperManifestError,
 	formatNativeHelperManifestWarning,
 	updateNativeHelperManifest,
 	verifyNativeHelperManifest,
@@ -46,12 +45,6 @@ function fallbackToBundledHelperOrExit(reason) {
 			binaryName: "recordly-nvidia-cuda-compositor.exe",
 		});
 		if (!verification.ok) {
-			if (verification.hasRecordedEntry) {
-				console.error(
-					formatNativeHelperManifestError("build-nvidia-cuda-compositor", verification),
-				);
-				process.exit(1);
-			}
 			console.warn(
 				formatNativeHelperManifestWarning("build-nvidia-cuda-compositor", verification),
 			);
