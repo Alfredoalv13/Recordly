@@ -11,6 +11,7 @@ import {
 	Check,
 	CaretLeft as ChevronLeft,
 	CaretRight as ChevronRight,
+	Clock,
 	DownloadSimple as Download,
 	ArrowSquareOut as ExternalLink,
 	FolderOpen,
@@ -44,6 +45,14 @@ const TAB_OPTIONS: { value: ExtensionTab; labelKey: string }[] = [
 
 const EXTENSIONS_DOCS_URL = "https://marketplace.recordly.dev/extensions";
 const EXTENSIONS_SUBMIT_URL = "https://marketplace.recordly.dev/extensions/submit";
+
+// Remote marketplace installation is temporarily disabled during the beta/
+// testing phase (see electron/extensions/extensionMarketplace.ts —
+// isRemoteMarketplaceInstallEnabled). Browsing/search still works; installing
+// is gated in the UI so users get a clear "coming soon" state instead of a
+// dead-end error after picking "Install". Locally bundled/first-party
+// extensions and "install from folder" are unaffected.
+const MARKETPLACE_INSTALL_DISABLED = true;
 
 function toSafeHttpUrl(value?: string): string | null {
 	if (!value) return null;
@@ -260,6 +269,14 @@ function MarketplaceCard({
 					<span className="flex items-center gap-1 text-[10px] text-emerald-500 font-medium">
 						<Check className="w-3 h-3" />
 						{t("status.installed")}
+					</span>
+				) : MARKETPLACE_INSTALL_DISABLED ? (
+					<span
+						className="flex items-center gap-1 text-[10px] text-muted-foreground/70 font-medium"
+						title={t("status.installDisabledHint")}
+					>
+						<Clock className="w-3 h-3" />
+						{t("status.comingSoon")}
 					</span>
 				) : (
 					<Button
@@ -531,21 +548,29 @@ function ExtensionDetailModal({
 							</span>
 						</div>
 					)}
-					{detail.source === "marketplace" && !detail.ext.installed && onInstall && (
-						<Button
-							size="sm"
-							className="h-8 px-3 text-[12px] bg-[#2563EB] hover:bg-[#2563EB]/90 text-white gap-1.5"
-							onClick={onInstall}
-							disabled={isInstalling}
-						>
-							{isInstalling ? (
-								<Loader2 className="w-3.5 h-3.5 animate-spin" />
-							) : (
-								<Download className="w-3.5 h-3.5" />
-							)}
-							{isInstalling ? t("actions.installing") : t("actions.install")}
-						</Button>
-					)}
+					{detail.source === "marketplace" &&
+						!detail.ext.installed &&
+						onInstall &&
+						(MARKETPLACE_INSTALL_DISABLED ? (
+							<span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 font-medium">
+								<Clock className="w-3.5 h-3.5" />
+								{t("status.comingSoonFull")}
+							</span>
+						) : (
+							<Button
+								size="sm"
+								className="h-8 px-3 text-[12px] bg-[#2563EB] hover:bg-[#2563EB]/90 text-white gap-1.5"
+								onClick={onInstall}
+								disabled={isInstalling}
+							>
+								{isInstalling ? (
+									<Loader2 className="w-3.5 h-3.5 animate-spin" />
+								) : (
+									<Download className="w-3.5 h-3.5" />
+								)}
+								{isInstalling ? t("actions.installing") : t("actions.install")}
+							</Button>
+						))}
 					{detail.source === "marketplace" && detail.ext.installed && (
 						<span className="flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
 							<Check className="w-3.5 h-3.5" />
@@ -1043,6 +1068,16 @@ function BrowseTab({
 	const t = useScopedT("extensions");
 	return (
 		<div className="flex flex-col gap-3">
+			{/* Beta notice: remote installs are disabled during the testing phase */}
+			{MARKETPLACE_INSTALL_DISABLED && (
+				<div className="flex items-start gap-2 p-2.5 rounded-lg border border-foreground/[0.08] bg-foreground/[0.03]">
+					<Clock className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0 mt-0.5" />
+					<p className="text-[10.5px] text-muted-foreground/80 leading-relaxed">
+						{t("browse.installDisabledNotice")}
+					</p>
+				</div>
+			)}
+
 			{/* Search */}
 			<div className="relative">
 				<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/70 pointer-events-none" />
