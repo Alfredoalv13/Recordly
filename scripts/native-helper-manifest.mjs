@@ -134,6 +134,7 @@ export function verifyNativeHelperManifest({
 		return {
 			ok: false,
 			manifestPath,
+			hasRecordedEntry: false,
 			reasons: ["manifest missing"],
 		};
 	}
@@ -142,6 +143,7 @@ export function verifyNativeHelperManifest({
 		return {
 			ok: false,
 			manifestPath,
+			hasRecordedEntry: false,
 			reasons: ["bundled helper missing"],
 		};
 	}
@@ -152,6 +154,7 @@ export function verifyNativeHelperManifest({
 		return {
 			ok: false,
 			manifestPath,
+			hasRecordedEntry: false,
 			reasons: [`${helperId} entry missing`],
 		};
 	}
@@ -178,6 +181,7 @@ export function verifyNativeHelperManifest({
 	return {
 		ok: reasons.length === 0,
 		manifestPath,
+		hasRecordedEntry: true,
 		reasons,
 	};
 }
@@ -185,4 +189,9 @@ export function verifyNativeHelperManifest({
 export function formatNativeHelperManifestWarning(helperLabel, verificationResult) {
 	const reasonText = verificationResult.reasons.join(", ");
 	return `[${helperLabel}] Bundled helper provenance check failed (${reasonText}). Rebuild the helper to refresh ${path.basename(verificationResult.manifestPath)}.`;
+}
+
+export function formatNativeHelperManifestError(helperLabel, verificationResult) {
+	const reasonText = verificationResult.reasons.join(", ");
+	return `[${helperLabel}] Bundled helper provenance check FAILED against recorded manifest (${reasonText}). The binary at "${verificationResult.manifestPath}" does not match its recorded hash — refusing to package a mismatched/tampered native helper. Rebuild the helper to refresh ${path.basename(verificationResult.manifestPath)} if this change is legitimate.`;
 }

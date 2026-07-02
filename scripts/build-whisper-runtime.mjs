@@ -1,4 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
 import { chmod, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { get as httpsGet } from "node:https";
@@ -6,6 +7,14 @@ import path from "node:path";
 
 const projectRoot = process.cwd();
 const whisperVersion = "v1.8.4";
+// SHA-256 of the source tarball at
+// https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.8.4.tar.gz
+// Verified by downloading the archive twice from GitHub on 2026-07-01 and
+// confirming both downloads produced byte-identical files with this digest.
+// If `whisperVersion` above is ever bumped, this hash MUST be recomputed and
+// pinned for the new tag before cutting a release build, e.g.:
+//   curl -sL https://github.com/ggml-org/whisper.cpp/archive/refs/tags/<tag>.tar.gz | shasum -a 256
+const WHISPER_SOURCE_SHA256 = "b26f30e52c095ccb75da40b168437736605eb280de57381887bf9e2b65f31e66";
 const nativeRoot = path.join(projectRoot, "electron", "native");
 const cacheRoot = path.join(projectRoot, ".tmp", "whisper-runtime");
 const archivePath = path.join(cacheRoot, `${whisperVersion}.tar.gz`);
@@ -223,6 +232,44 @@ async function downloadFile(url, destinationPath) {
 	});
 }
 
+async function computeFileSha256(filePath) {
+	const fileBuffer = await readFile(filePath);
+	return createHash("sha256").update(fileBuffer).digest("hex");
+}
+
+async function verifyArchiveChecksum(downloadedArchivePath) {
+	if (
+		!WHISPER_SOURCE_SHA256 ||
+		WHISPER_SOURCE_SHA256 === "REPLACE_WITH_PINNED_SHA256_BEFORE_RELEASE"
+	) {
+		throw new Error(
+			"[build-whisper-runtime] WHISPER_SOURCE_SHA256 is still a placeholder. " +
+				"A maintainer must compute the real SHA-256 for the whisper.cpp " +
+				`${whisperVersion} source tarball (e.g. via ` +
+				`\`curl -sL ${getSourceArchiveUrl()} | shasum -a 256\`) and pin it in ` +
+				"scripts/build-whisper-runtime.mjs before this build can proceed.",
+		);
+	}
+
+	const actualSha256 = await computeFileSha256(downloadedArchivePath);
+	if (actualSha256 !== WHISPER_SOURCE_SHA256.toLowerCase()) {
+		// Remove the untrusted archive so a stale/tampered file can't be reused
+		// by a subsequent run's `existsSync(archivePath)` cache check.
+		await rm(downloadedArchivePath, { force: true });
+		throw new Error(
+			"[build-whisper-runtime] SHA-256 checksum mismatch for downloaded whisper.cpp " +
+				`${whisperVersion} source tarball. Expected ${WHISPER_SOURCE_SHA256} but got ` +
+				`${actualSha256}. Refusing to extract/build a source archive that does not match ` +
+				"the pinned checksum -- this could indicate a compromised CDN, a MITM, or a " +
+				"moved/re-tagged release. Aborting build.",
+		);
+	}
+
+	console.log(
+		`[build-whisper-runtime] Verified whisper.cpp ${whisperVersion} source checksum (sha256:${actualSha256}).`,
+	);
+}
+
 async function ensureSourceTree() {
 	const extractedSourceDir = path.join(
 		extractRoot,
@@ -239,6 +286,8 @@ async function ensureSourceTree() {
 		console.log(`[build-whisper-runtime] Downloading whisper.cpp ${whisperVersion} source...`);
 		await downloadFile(getSourceArchiveUrl(), archivePath);
 	}
+
+	await verifyArchiveChecksum(archivePath);
 
 	ensureTarAvailable();
 	execFileSync("tar", ["-xzf", archivePath, "-C", extractRoot], { stdio: "inherit" });
