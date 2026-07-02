@@ -788,6 +788,48 @@ function updateTrayMenu(recording: boolean = false) {
 	}
 }
 
+/**
+ * Shows the "you have unsaved changes" confirmation dialog for the given editor
+ * window and, if the user chooses to save, waits for the renderer to finish
+ * saving via the existing request-save-before-close/save-before-close-done
+ * IPC round trip.
+ *
+ * Returns:
+ * - "close": it is safe to close/quit (either there was nothing to save, the
+ *   user chose to discard, or the save completed successfully).
+ * - "cancel": the user canceled; closing/quitting should be aborted.
+ */
+async function promptToSaveUnsavedChangesBeforeClosing(
+	editorWindow: BrowserWindow,
+): Promise<"close" | "cancel"> {
+	const choice = dialog.showMessageBoxSync(editorWindow, {
+		type: "warning",
+		buttons: ["Save & Close", "Discard & Close", "Cancel"],
+		defaultId: 0,
+		cancelId: 2,
+		title: "Unsaved Changes",
+		message: "You have unsaved changes.",
+		detail: "Do you want to save your project before closing?",
+	});
+
+	if (choice === 1) {
+		return "close";
+	}
+
+	if (choice !== 0) {
+		return "cancel";
+	}
+
+	editorWindow.webContents.send("request-save-before-close");
+	const saved = await new Promise<boolean>((resolve) => {
+		ipcMain.once("save-before-close-done", (_event, savedResult: boolean) => {
+			resolve(savedResult);
+		});
+	});
+
+	return saved ? "close" : "cancel";
+}
+
 function createEditorWindowWrapper() {
 	const existingEditorWindow = getExistingEditorWindow();
 	if (existingEditorWindow) {
@@ -856,26 +898,11 @@ function createEditorWindowWrapper() {
 
 		event.preventDefault();
 
-		const choice = dialog.showMessageBoxSync(editorWindow, {
-			type: "warning",
-			buttons: ["Save & Close", "Discard & Close", "Cancel"],
-			defaultId: 0,
-			cancelId: 2,
-			title: "Unsaved Changes",
-			message: "You have unsaved changes.",
-			detail: "Do you want to save your project before closing?",
+		void promptToSaveUnsavedChangesBeforeClosing(editorWindow).then((outcome) => {
+			if (outcome === "close") {
+				closeEditorWindowBypassingUnsavedPrompt(editorWindow);
+			}
 		});
-
-		if (choice === 0) {
-			editorWindow.webContents.send("request-save-before-close");
-			ipcMain.once("save-before-close-done", (_event, saved: boolean) => {
-				if (saved) {
-					closeEditorWindowBypassingUnsavedPrompt(editorWindow);
-				}
-			});
-		} else if (choice === 1) {
-			closeEditorWindowBypassingUnsavedPrompt(editorWindow);
-		}
 	});
 
 	return editorWindow;
@@ -889,14 +916,68 @@ function createSourceSelectorWindowWrapper() {
 	return sourceSelectorWindow;
 }
 
+// Guards re-entrancy for the before-quit handler below: once we've confirmed
+// it's safe to quit (or timed out waiting), further before-quit events
+// (triggered by our own app.quit() call) should fall through immediately
+// instead of re-prompting or re-waiting.
+let isQuitConfirmed = false;
+// True while we're already waiting on an in-flight autosave / showing the
+// unsaved-changes dialog, so a second before-quit event (e.g. the user
+// mashing Cmd+Q) doesn't spawn a second prompt.
+let isQuitCheckInProgress = false;
+
+const QUIT_AUTOSAVE_WAIT_TIMEOUT_MS = 5000;
+
 // On macOS, applications and their menu bar stay active until the user quits
 // explicitly with Cmd + Q.
-app.on("before-quit", () => {
-	isAppQuitting = true;
-	killWindowsCaptureProcess();
-	showCursor();
-	cleanupNativeVideoExportSessions();
-	void cleanupAllExportStreams();
+app.on("before-quit", (event) => {
+	if (isQuitConfirmed) {
+		isAppQuitting = true;
+		killWindowsCaptureProcess();
+		showCursor();
+		cleanupNativeVideoExportSessions();
+		void cleanupAllExportStreams();
+		return;
+	}
+
+	const editorWindow = getExistingEditorWindow();
+
+	if (!editorWindow || !editorHasUnsavedChanges) {
+		isQuitConfirmed = true;
+		return;
+	}
+
+	// There's an unsaved (or still in-flight autosaving) editor project.
+	// Block quitting until we've either waited for the save to finish or
+	// asked the user what to do, reusing the same dialog/IPC flow as
+	// window-close. Never hang indefinitely: fall back to quitting anyway
+	// after a short timeout so a stuck save can't trap the app open.
+	event.preventDefault();
+
+	if (isQuitCheckInProgress) {
+		return;
+	}
+	isQuitCheckInProgress = true;
+
+	const timeoutPromise = new Promise<"timeout">((resolve) => {
+		setTimeout(() => resolve("timeout"), QUIT_AUTOSAVE_WAIT_TIMEOUT_MS);
+	});
+
+	Promise.race([promptToSaveUnsavedChangesBeforeClosing(editorWindow), timeoutPromise])
+		.then((outcome) => {
+			isQuitCheckInProgress = false;
+			if (outcome === "cancel") {
+				return;
+			}
+			// "close" or "timeout": proceed with quitting.
+			isQuitConfirmed = true;
+			app.quit();
+		})
+		.catch(() => {
+			isQuitCheckInProgress = false;
+			isQuitConfirmed = true;
+			app.quit();
+		});
 });
 
 app.on("window-all-closed", () => {
