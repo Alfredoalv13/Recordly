@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 import type { ProjectLibraryEntry } from "@/components/video-editor/ProjectBrowserDialog";
 import type { DesktopSource } from "../popovers/launchPopoverTypes";
 
@@ -24,6 +25,10 @@ export function useLaunchWindowActions() {
 		if (result.success && result.path) {
 			await window.electronAPI.setCurrentVideoPath(result.path);
 			await window.electronAPI.switchToEditor();
+			return;
+		}
+		if (!result.success) {
+			toast.error("Failed to open video file. Please try again.");
 		}
 	}, []);
 
