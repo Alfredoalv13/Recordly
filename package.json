@@ -12,6 +12,7 @@
 		"url": "https://github.com/Alfredoalv13/Recordly/issues"
 	},
 	"private": true,
+	"license": "AGPL-3.0-or-later",
 	"version": "1.3.4",
 	"type": "module",
 	"scripts": {
