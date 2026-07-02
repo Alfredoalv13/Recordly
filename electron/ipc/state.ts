@@ -21,6 +21,14 @@ export let currentRecordingSession: RecordingSessionData | null = null;
 // ── Security: approved read paths ─────────────────────────────────────────────
 export const approvedLocalReadPaths = new Set<string>();
 
+// ── Security: approved Whisper executable paths ───────────────────────────────
+// Populated only when the user explicitly selects a binary via the
+// open-whisper-executable-picker dialog (plus the bundled/default binaries,
+// which are always allowed). generate-auto-captions must reject any
+// whisperExecutablePath that isn't in this set, so a compromised renderer
+// cannot smuggle an arbitrary path into execFileAsync.
+export const approvedWhisperExecutablePaths = new Set<string>();
+
 // ── Native macOS capture ──────────────────────────────────────────────────────
 export let nativeScreenRecordingActive = false;
 export let nativeCaptureProcess: ChildProcessWithoutNullStreams | null = null;

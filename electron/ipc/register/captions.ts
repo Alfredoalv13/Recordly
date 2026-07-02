@@ -7,7 +7,7 @@ import {
 	sendWhisperModelDownloadProgress,
 } from "../captions/whisper";
 import { generateAutoCaptionsFromVideo } from "../captions/generate";
-import { approveUserPath, getRecordingsDir } from "../utils";
+import { approveUserPath, approveWhisperExecutablePath, getRecordingsDir } from "../utils";
 
 export function registerCaptionHandlers() {
   ipcMain.handle('open-video-file-picker', async () => {
@@ -89,6 +89,9 @@ export function registerCaptionHandlers() {
       }
 
       approveUserPath(result.filePaths[0])
+      // Only a path the user explicitly picked in this dialog is trusted for
+      // execFileAsync in generate-auto-captions; see approvedWhisperExecutablePaths.
+      approveWhisperExecutablePath(result.filePaths[0])
       return { success: true, path: result.filePaths[0] }
     } catch (error) {
       console.error('Failed to open Whisper executable picker:', error)

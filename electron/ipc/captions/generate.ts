@@ -7,7 +7,7 @@ import { app } from "electron";
 import { getFfmpegBinaryPath } from "../ffmpeg/binary";
 import { getBundledWhisperExecutableCandidates } from "../paths/binaries";
 import { parseWhisperJsonCues, parseSrtCues, shouldRetryWhisperWithoutJson } from "./parser";
-import { normalizeVideoSourcePath } from "../utils";
+import { isApprovedWhisperExecutablePath, normalizeVideoSourcePath } from "../utils";
 import { resolveRecordingSession } from "../project/session";
 
 const execFileAsync = promisify(execFile);
@@ -32,9 +32,31 @@ export async function isExecutableFile(filePath: string) {
 	}
 }
 
+// A whisper binary is only ever allowed to run if it's one of the app's own
+// bundled/default candidates, or a path the user explicitly selected via the
+// open-whisper-executable-picker dialog (see approvedWhisperExecutablePaths /
+// isApprovedWhisperExecutablePath). This mirrors the approvedLocalReadPaths /
+// isTrustedProjectPath / isOwnedExportPath allowlist pattern used elsewhere in
+// electron/ipc so a compromised renderer can't smuggle an arbitrary path into
+// execFileAsync just by naming it in the IPC payload.
+export function isAllowedWhisperExecutablePath(candidatePath: string): boolean {
+	const normalized = path.resolve(candidatePath);
+	const bundledCandidates = getBundledWhisperExecutableCandidates().map((candidate) =>
+		path.resolve(candidate),
+	);
+	return bundledCandidates.includes(normalized) || isApprovedWhisperExecutablePath(normalized);
+}
+
 export async function resolveWhisperExecutablePath(preferredPath?: string | null) {
+	const trimmedPreferredPath = preferredPath?.trim() || null;
+	if (trimmedPreferredPath && !isAllowedWhisperExecutablePath(trimmedPreferredPath)) {
+		throw new Error(
+			"The provided Whisper executable path was not approved. Select the Whisper binary via the picker dialog, or use the bundled default.",
+		);
+	}
+
 	const candidatePaths = [
-		preferredPath?.trim() || null,
+		trimmedPreferredPath,
 		...getBundledWhisperExecutableCandidates(),
 		process.env["WHISPER_CPP_PATH"]?.trim() || null,
 		process.platform === "darwin" ? "/opt/homebrew/bin/whisper-cli" : null,
