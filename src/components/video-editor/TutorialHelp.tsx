@@ -2,6 +2,7 @@ import {
 	ArrowRight,
 	ArrowSquareOut as ExternalLink,
 	Question as HelpCircle,
+	Info,
 	Keyboard,
 	ChatDots as MessageSquareMore,
 	Scissors,
@@ -89,6 +90,75 @@ export function FeedbackDialog() {
 						<span className="flex items-center gap-2 text-sm font-medium">
 							<MessageSquareMore className="h-4 w-4" />
 							{t("feedback.reportIssue", "Report issue / send feedback")}
+						</span>
+						<ExternalLink className="h-3.5 w-3.5 text-muted-foreground/70" />
+					</Button>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+export function AboutDialog() {
+	const t = useScopedT("editor");
+	const [appVersion, setAppVersion] = useState<string | null>(null);
+
+	useEffect(() => {
+		window.electronAPI
+			.getAppVersion()
+			.then(setAppVersion)
+			.catch(() => setAppVersion(null));
+	}, []);
+
+	return (
+		<Dialog>
+			<DialogTrigger asChild>
+				<Button
+					variant="ghost"
+					size="sm"
+					className={APP_HEADER_ICON_BUTTON_CLASS}
+					title={t("about.trigger", "About")}
+					aria-label={t("about.trigger", "About")}
+				>
+					<Info className="h-3.5 w-3.5" />
+				</Button>
+			</DialogTrigger>
+			<DialogContent className="max-w-md bg-editor-dialog border-foreground/10 [&>button]:text-muted-foreground [&>button:hover]:text-foreground">
+				<DialogHeader>
+					<DialogTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
+						<Info className="h-5 w-5 text-[#2563EB]" />{" "}
+						{t("about.title", "About VybeClip")}
+					</DialogTitle>
+					<DialogDescription className="text-muted-foreground">
+						{appVersion
+							? t("about.version", "Version {{version}}", { version: appVersion })
+							: t("about.by", "By Box Creative Studio")}
+					</DialogDescription>
+				</DialogHeader>
+				<div className="mt-2 space-y-4">
+					<p className="text-sm text-muted-foreground">
+						{t("about.developedBy", "Developed by Box Creative Studio.")}
+					</p>
+					<div className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-xs text-muted-foreground leading-relaxed">
+						{t(
+							"about.attribution",
+							"VybeClip's recording and editing engine is built on Recordly (AGPLv3) by webadderall, originally forked from OpenScreen by Siddharth Vaddem (MIT).",
+						)}
+					</div>
+					<Button
+						type="button"
+						variant="outline"
+						onClick={() =>
+							void openExternalLink(
+								"https://github.com/Alfredoalv13/Recordly/blob/main/LICENSE.md",
+								t("about.licenseOpenFailed", "Failed to open license."),
+							)
+						}
+						className="h-10 w-full justify-between border-foreground/10 bg-foreground/5 px-4 text-foreground hover:bg-foreground/10 hover:text-foreground"
+					>
+						<span className="flex items-center gap-2 text-sm font-medium">
+							<Info className="h-4 w-4" />
+							{t("about.viewLicense", "View full license")}
 						</span>
 						<ExternalLink className="h-3.5 w-3.5 text-muted-foreground/70" />
 					</Button>

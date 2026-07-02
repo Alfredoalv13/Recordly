@@ -155,6 +155,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { getDevOpenRecordingConfig, getSmokeExportConfig } from "./smokeExportConfig";
 import { createSmokeExportProgressSampler } from "./smokeExportProgress";
 import {
+	AboutDialog,
 	APP_HEADER_ICON_BUTTON_CLASS,
 	FeedbackDialog,
 	openExternalLink,
@@ -5320,6 +5321,7 @@ export default function VideoEditor() {
 						<FolderOpen className="h-4 w-4" />
 					</Button>
 					<FeedbackDialog />
+					<AboutDialog />
 					<div className="ml-1 h-5 w-px bg-foreground/10" />
 					<Button
 						type="button"
