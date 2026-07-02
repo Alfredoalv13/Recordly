@@ -25,8 +25,8 @@ import {
 	killWindowsCaptureProcess,
 	registerIpcHandlers,
 } from "./ipc/handlers";
-import { ensureMediaServer } from "./mediaServer";
-import { ensurePackagedRendererServer } from "./rendererServer";
+import { ensureMediaServer, getMediaServerBaseUrl } from "./mediaServer";
+import { ensurePackagedRendererServer, getPackagedRendererBaseUrl } from "./rendererServer";
 import type { UpdateToastPayload } from "./updater";
 import {
 	checkForAppUpdates,
@@ -132,6 +132,69 @@ const IS_DEV = Boolean(VITE_DEV_SERVER_URL);
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 	? path.join(process.env.APP_ROOT, "public")
 	: RENDERER_DIST;
+
+/**
+ * Registers a Content-Security-Policy header for every response served to
+ * our renderers. This is the mitigation that lets `webSecurity` stay enabled
+ * (see electron/windows.ts) while still allowing the app to talk to its own
+ * local-only HTTP servers:
+ *   - ensurePackagedRendererServer() serves the packaged index.html/js/css
+ *     from http://127.0.0.1:<random-port> (electron/rendererServer.ts).
+ *   - ensureMediaServer() streams allow-listed local video/audio files from
+ *     http://127.0.0.1:<random-port>/video (electron/mediaServer.ts).
+ *   - In dev, the renderer is loaded from the Vite dev server
+ *     (VITE_DEV_SERVER_URL, typically http://localhost:5173), which is
+ *     already covered by 'self'.
+ * `file:` is additionally allowed for img-src/media-src only, since
+ * user-installed extensions (already fully-trusted local code — see
+ * EXTENSIONS.md) reference their own icon/asset files via file:// URLs
+ * (see src/components/video-editor/ExtensionIcon.tsx), and
+ * getRenderableVideoUrl() falls back to file:// if the media server is
+ * unavailable (src/lib/assetPath.ts).
+ */
+function configureContentSecurityPolicy() {
+	const selfOrigins = new Set<string>(["'self'"]);
+
+	const rendererBaseUrl = getPackagedRendererBaseUrl();
+	if (rendererBaseUrl) {
+		selfOrigins.add(rendererBaseUrl);
+	}
+
+	const mediaBaseUrl = getMediaServerBaseUrl();
+	if (mediaBaseUrl) {
+		selfOrigins.add(mediaBaseUrl);
+	}
+
+	if (VITE_DEV_SERVER_URL) {
+		selfOrigins.add(VITE_DEV_SERVER_URL);
+	}
+
+	const originList = Array.from(selfOrigins).join(" ");
+
+	const csp = [
+		`default-src 'self' ${originList}`,
+		// The renderer bundle currently relies on inline/style-injected code
+		// paths (React dev overlays in dev mode, dynamically constructed
+		// styles for the editor canvas), so 'unsafe-inline' is kept for
+		// script/style until those call sites are audited and tightened.
+		`script-src 'self' 'unsafe-inline' 'unsafe-eval' ${originList}`,
+		`style-src 'self' 'unsafe-inline' ${originList}`,
+		`img-src 'self' data: blob: file: ${originList}`,
+		`media-src 'self' data: blob: file: ${originList}`,
+		`font-src 'self' data: ${originList}`,
+		`connect-src 'self' ${originList} ws: wss:`,
+		"object-src 'none'",
+	].join("; ");
+
+	session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+		callback({
+			responseHeaders: {
+				...details.responseHeaders,
+				"Content-Security-Policy": [csp],
+			},
+		});
+	});
+}
 
 // Window references
 let mainWindow: BrowserWindow | null = null;
@@ -922,6 +985,10 @@ app.whenReady().then(async () => {
 	} catch (error) {
 		console.warn("[media-server] Failed to start media server:", error);
 	}
+
+	// Must run after the local servers above are started so the CSP can
+	// allow-list their actual (randomly-assigned) ports.
+	configureContentSecurityPolicy();
 
 	registerIpcHandlers(
 		createEditorWindowWrapper,

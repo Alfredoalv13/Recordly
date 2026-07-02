@@ -452,7 +452,10 @@ export function createHudOverlayWindow(): BrowserWindow {
 			preload: path.join(electronWindowsDir, "preload.mjs"),
 			nodeIntegration: false,
 			contextIsolation: true,
-			webSecurity: false,
+			// webSecurity is left enabled (default). Local media/extension assets
+			// are served through mediaServer.ts (http://127.0.0.1) or loaded as
+			// data: URLs — see the CSP registered in main.ts for the allowed
+			// origins/schemes.
 			backgroundThrottling: false,
 		},
 	});
@@ -872,7 +875,10 @@ export function createStudioWindow(): BrowserWindow {
 			preload: path.join(electronWindowsDir, "preload.mjs"),
 			nodeIntegration: false,
 			contextIsolation: true,
-			webSecurity: false,
+			// webSecurity is left enabled (default). Local media/extension assets
+			// are served through mediaServer.ts (http://127.0.0.1) or loaded as
+			// data: URLs — see the CSP registered in main.ts for the allowed
+			// origins/schemes.
 			backgroundThrottling: false,
 		},
 	});
@@ -929,7 +935,10 @@ export function createEditorWindow(): BrowserWindow {
 			preload: path.join(electronWindowsDir, "preload.mjs"),
 			nodeIntegration: false,
 			contextIsolation: true,
-			webSecurity: false,
+			// webSecurity is left enabled (default). Local media/extension assets
+			// are served through mediaServer.ts (http://127.0.0.1) or loaded as
+			// data: URLs — see the CSP registered in main.ts for the allowed
+			// origins/schemes.
 			backgroundThrottling: false,
 		},
 	});
