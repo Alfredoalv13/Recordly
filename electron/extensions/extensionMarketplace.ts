@@ -218,18 +218,21 @@ export async function downloadAndInstallExtension(
 	// later re-enabled. This protects against a compromised/mocked
 	// marketplace response, or a stale downloadUrl for an extension that
 	// was flagged/rejected after the caller fetched its listing.
-	try {
-		const listing = await getMarketplaceExtension(extensionId);
-		if (listing && listing.reviewStatus !== "approved") {
-			return {
-				success: false,
-				error: `Extension is not approved for installation (review status: ${listing.reviewStatus})`,
-			};
-		}
-	} catch {
-		// If the review status can't be verified, fall through to the
-		// existing manifest/signature checks rather than hard-failing here —
-		// the marketplace-gate above already blocks this path by default.
+	// getMarketplaceExtension() already catches its own errors and returns
+	// null on any failure (network error, deleted extension, non-200), so
+	// treat "couldn't verify" as fail-closed rather than silently proceeding.
+	const listing = await getMarketplaceExtension(extensionId);
+	if (!listing) {
+		return {
+			success: false,
+			error: "Unable to verify extension review status; refusing to install.",
+		};
+	}
+	if (listing.reviewStatus !== "approved") {
+		return {
+			success: false,
+			error: `Extension is not approved for installation (review status: ${listing.reviewStatus})`,
+		};
 	}
 
 	const tempDir = path.join(app.getPath("temp"), `recordly-ext-${extensionId}-${Date.now()}`);
