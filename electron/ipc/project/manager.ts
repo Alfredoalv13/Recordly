@@ -469,3 +469,54 @@ export function isTrustedProjectPath(filePath?: string | null): boolean {
 	if (!filePath || !currentProjectPath) return false;
 	return normalizePath(filePath) === normalizePath(currentProjectPath);
 }
+
+/**
+ * Confines project-open requests to locations the app itself considers safe:
+ * the managed projects directory, or a path the app has already recorded in
+ * the recent-projects list (which is only ever populated via trusted dialog-
+ * driven save/load flows, never from an arbitrary renderer-supplied string).
+ * This mirrors isAllowedLocalReadPath's canonicalization so a symlink cannot
+ * be used to smuggle in a path outside these locations.
+ */
+export async function isTrustedOpenableProjectPath(filePath?: string | null): Promise<boolean> {
+	if (!filePath || typeof filePath !== "string" || !filePath.trim()) {
+		return false;
+	}
+
+	if (!hasProjectFileExtension(filePath)) {
+		return false;
+	}
+
+	const normalizedCandidatePath = normalizePath(filePath);
+	const projectsDir = await getProjectsDir();
+	const recentProjectPaths = await loadRecentProjectPaths();
+	const trustedLexicalPaths = new Set(
+		[projectsDir, ...recentProjectPaths].map((value) => normalizePath(value)),
+	);
+
+	const isLexicallyTrusted =
+		isPathInsideDirectory(normalizedCandidatePath, normalizePath(projectsDir)) ||
+		trustedLexicalPaths.has(normalizedCandidatePath);
+	if (!isLexicallyTrusted) {
+		return false;
+	}
+
+	// Canonicalize to guard against a symlink under a trusted location that
+	// resolves outside of it.
+	let canonicalCandidatePath = normalizedCandidatePath;
+	try {
+		canonicalCandidatePath = normalizePath(realpathSync(normalizedCandidatePath));
+	} catch {
+		// File may not exist yet / cannot be resolved; the lexical check above
+		// already constrained it, so fall through with the lexical path.
+	}
+
+	if (canonicalCandidatePath === normalizedCandidatePath) {
+		return true;
+	}
+
+	return (
+		isPathInsideDirectory(canonicalCandidatePath, normalizePath(projectsDir)) ||
+		trustedLexicalPaths.has(canonicalCandidatePath)
+	);
+}

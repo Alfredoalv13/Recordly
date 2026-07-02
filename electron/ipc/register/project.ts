@@ -13,6 +13,7 @@ import {
 	getProjectsDir,
   getProjectThumbnailPath,
 	isPathInsideDirectory,
+	isTrustedOpenableProjectPath,
 	isTrustedProjectPath,
 	listProjectLibraryEntries,
 	loadProjectFromPath,
@@ -509,6 +510,15 @@ export function registerProjectHandlers() {
 
   ipcMain.handle('open-project-file-at-path', async (_, filePath: string) => {
     try {
+      if (!(await isTrustedOpenableProjectPath(filePath))) {
+        console.warn(`[open-project-file-at-path] Blocked untrusted path: ${filePath}`)
+        return {
+          success: false,
+          message: 'Failed to open project file',
+          error: 'Project path is not in an allowed location',
+        }
+      }
+
       return await loadProjectFromPath(filePath)
     } catch (error) {
       console.error('Failed to open project file at path:', error)
