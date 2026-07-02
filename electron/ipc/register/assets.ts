@@ -86,7 +86,8 @@ export function registerAssetHandlers() {
 
       return { success: true, data: jpegData! }
     } catch (error) {
-      return { success: false, error: String(error) }
+      console.error('Failed to generate wallpaper thumbnail:', error)
+      return { success: false, error: 'Failed to generate thumbnail' }
     }
   })
 
@@ -122,7 +123,7 @@ export function registerAssetHandlers() {
       return { success: true, files }
     } catch (error) {
       console.error('Failed to list asset directory:', error)
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to list asset directory' }
     }
   })
 
@@ -139,7 +140,7 @@ export function registerAssetHandlers() {
       return { success: true, data }
     } catch (error) {
       console.error('Failed to read local file:', error)
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to read local file' }
     }
   })
 

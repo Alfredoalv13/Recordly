@@ -429,7 +429,7 @@ export function registerExportHandlers() {
 				);
 				return {
 					success: false,
-					error: String(error),
+					error: "Failed to start native video export session",
 				};
 			}
 		},
@@ -457,7 +457,7 @@ export function registerExportHandlers() {
 			console.warn("[probe-native-video-metadata] Failed:", error);
 			return {
 				success: false,
-				error: error instanceof Error ? error.message : String(error),
+				error: "Failed to probe video metadata",
 			};
 		}
 	});
@@ -472,7 +472,7 @@ export function registerExportHandlers() {
 			console.warn("[native-export-capabilities] Failed:", error);
 			return {
 				success: false,
-				error: error instanceof Error ? error.message : String(error),
+				error: "Failed to get native export capabilities",
 			};
 		}
 	});
@@ -516,7 +516,7 @@ export function registerExportHandlers() {
 				console.warn("[native-static-layout-export] Failed:", error);
 				return {
 					success: false,
-					error: error instanceof Error ? error.message : String(error),
+					error: "Failed to export static layout video",
 				};
 			}
 		},

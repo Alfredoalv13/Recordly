@@ -146,7 +146,7 @@ export function registerCaptionHandlers() {
       return { success: true, path: modelPath }
     } catch (error) {
       console.error('Failed to download Whisper small model:', error)
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to download Whisper model' }
     }
   })
 
@@ -176,9 +176,9 @@ export function registerCaptionHandlers() {
         status: 'error',
         progress: 0,
         path: null,
-        error: String(error),
+        error: 'Failed to delete Whisper model',
       })
-      return { success: false, error: String(error) }
+      return { success: false, error: 'Failed to delete Whisper model' }
     }
   })
 
@@ -201,7 +201,7 @@ export function registerCaptionHandlers() {
       console.error('Failed to generate auto captions:', error)
       return {
         success: false,
-        error: String(error),
+        error: 'Failed to generate auto captions',
         message: 'Failed to generate auto captions',
       }
     }
