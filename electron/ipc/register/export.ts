@@ -1,10 +1,12 @@
 import type { ChildProcessByStdio } from "node:child_process";
 import { spawn } from "node:child_process";
+import { realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 import type { SaveDialogOptions } from "electron";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { RECORDINGS_DIR, USER_DATA_PATH } from "../../appPaths";
 import {
 	parseCaptionSidecarPayload,
 	type CaptionSidecarPayload,
@@ -49,8 +51,12 @@ import {
 	type NativeExportEncodingMode,
 	type NativeVideoExportFinishOptions,
 } from "../nativeVideoExport";
-import { isAllowedLocalReadPath, resolveApprovedLocalMediaPath } from "../project/manager";
-import { approveUserPath } from "../utils";
+import {
+	isAllowedLocalReadPath,
+	isPathInsideDirectory,
+	resolveApprovedLocalMediaPath,
+} from "../project/manager";
+import { approveUserPath, normalizePath } from "../utils";
 
 function getPartialExportDestinationPath(destinationPath: string) {
 	const parsed = path.parse(destinationPath);
@@ -250,6 +256,42 @@ function isTempPathSafe(tempPath: string): boolean {
 	}
 	const withSep = tempRoot.endsWith(path.sep) ? tempRoot : tempRoot + path.sep;
 	return candidate.startsWith(withSep);
+}
+
+// Security: "write-exported-video-to-path" lets the renderer choose an
+// arbitrary destination (used by dev/smoke-export tooling), so — unlike a
+// save-dialog result — it is not implicitly scoped to a user-chosen path.
+// Confine writes to app-managed directories the same way isAllowedLocalReadPath
+// confines reads, and canonicalize so a symlink can't smuggle the write outside
+// the allowlist.
+function isAllowedExportWritePath(candidatePath: string): boolean {
+	const allowedPrefixes = [
+		app.getPath("temp"),
+		app.getPath("downloads"),
+		USER_DATA_PATH,
+		RECORDINGS_DIR,
+	];
+	const normalizedCandidatePath = normalizePath(candidatePath);
+	if (!allowedPrefixes.some((prefix) => isPathInsideDirectory(normalizedCandidatePath, prefix))) {
+		return false;
+	}
+
+	// The destination file itself usually doesn't exist yet, so canonicalize the
+	// parent directory instead and rejoin the (non-existent) file name.
+	let canonicalDirectory: string;
+	try {
+		canonicalDirectory = normalizePath(realpathSync(path.dirname(normalizedCandidatePath)));
+	} catch {
+		// Parent directory doesn't exist yet (e.g. it will be mkdir'd below); the
+		// lexical check above is all we can rely on in that case.
+		return true;
+	}
+
+	const canonicalCandidatePath = path.join(
+		canonicalDirectory,
+		path.basename(normalizedCandidatePath),
+	);
+	return allowedPrefixes.some((prefix) => isPathInsideDirectory(canonicalCandidatePath, prefix));
 }
 
 export function registerExportHandlers() {
@@ -912,6 +954,15 @@ export function registerExportHandlers() {
 			captionSidecar?: CaptionSidecarPayload,
 		) => {
 			try {
+				if (typeof outputPath !== "string" || outputPath.trim().length === 0) {
+					return {
+						success: false,
+						message: "Invalid output path",
+						canceled: false,
+						error: "write-exported-video-to-path requires an output path",
+					};
+				}
+
 				const sidecarPayload = parseCaptionSidecarPayload(captionSidecar);
 				const sizeError = getInMemoryExportTooLargeMessage(videoData.byteLength);
 				if (sizeError) {
@@ -924,6 +975,19 @@ export function registerExportHandlers() {
 				}
 
 				const resolvedPath = path.resolve(outputPath);
+				// Security: this path comes directly from the renderer (e.g. dev/
+				// smoke-export tooling), not from a tracked dialog.showSaveDialog
+				// result, so confine it to app-managed directories the same way
+				// reads are confined via isAllowedLocalReadPath. Without this an
+				// arbitrary/compromised renderer could write anywhere on disk.
+				if (!isAllowedExportWritePath(resolvedPath)) {
+					return {
+						success: false,
+						message: "Output path is not an approved export destination",
+						canceled: false,
+						error: "Output path is not an approved export destination",
+					};
+				}
 				await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
 				await fs.writeFile(resolvedPath, Buffer.from(videoData));
 				const captionSidecarResult = await writeCaptionSidecarsBestEffort(
