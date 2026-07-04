@@ -4269,7 +4269,14 @@ export default function VideoEditor() {
 					: null;
 
 			const xml = buildFcpxml(
-				{ ...currentPersistedEditorState, speedRegions: effectiveSpeedRegions },
+				{
+					...currentPersistedEditorState,
+					speedRegions: effectiveSpeedRegions,
+					// zoomRegions are authored in timeline (post-trim) time, but
+					// buildFcpxml operates on source-time segments — map them the
+					// same way the real render/export pipeline does.
+					zoomRegions: effectiveZoomRegions,
+				},
 				videoAsset,
 				webcamAsset,
 			);
@@ -4299,6 +4306,7 @@ export default function VideoEditor() {
 		webcam,
 		currentPersistedEditorState,
 		effectiveSpeedRegions,
+		effectiveZoomRegions,
 		showExportSuccessToast,
 	]);
 
