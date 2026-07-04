@@ -2,10 +2,12 @@ import {
 	BookmarkSimple,
 	Check,
 	CaretDown as ChevronDown,
+	CircleNotch,
 	ClosedCaptioning,
 	Crop,
 	Cursor,
 	DownloadSimple as Download,
+	FloppyDisk,
 	FolderOpen,
 	Gear,
 	Pause,
@@ -382,6 +384,7 @@ export default function VideoEditor() {
 	const [isEditingProjectName, setIsEditingProjectName] = useState(false);
 	const [projectNameDraft, setProjectNameDraft] = useState("");
 	const [isSavingProjectName, setIsSavingProjectName] = useState(false);
+	const [isSavingProject, setIsSavingProject] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
@@ -2946,6 +2949,24 @@ export default function VideoEditor() {
 			setProjectBrowserOpen(false);
 		}
 	}, [saveProject]);
+
+	const handleSaveProjectButtonClick = useCallback(async () => {
+		setIsSavingProject(true);
+		try {
+			await handleSaveProject();
+		} finally {
+			setIsSavingProject(false);
+		}
+	}, [handleSaveProject]);
+
+	const handleSaveProjectAsButtonClick = useCallback(async () => {
+		setIsSavingProject(true);
+		try {
+			await handleSaveProjectAs();
+		} finally {
+			setIsSavingProject(false);
+		}
+	}, [handleSaveProjectAs]);
 
 	useEffect(() => {
 		if (!currentProjectPath || !hasUnsavedChanges) {
@@ -5560,6 +5581,50 @@ export default function VideoEditor() {
 						aria-hidden="true"
 						className="mx-2 h-4 w-px shrink-0 bg-foreground/10 opacity-0"
 					/>
+					<div className="flex items-center gap-1">
+						<Button
+							type="button"
+							variant="ghost"
+							onClick={() => void handleSaveProjectButtonClick()}
+							disabled={isSavingProject}
+							className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[5px] border border-foreground/10 bg-foreground/5 px-3 text-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+							title={t("common.actions.saveProject", "Save Project")}
+							aria-label={t("common.actions.saveProject", "Save Project")}
+						>
+							{isSavingProject ? (
+								<CircleNotch className="h-4 w-4 animate-spin" />
+							) : (
+								<FloppyDisk className="h-4 w-4" />
+							)}
+							<span className="text-sm font-medium tracking-tight">
+								{t("common.actions.save", "Save")}
+							</span>
+						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									type="button"
+									variant="ghost"
+									disabled={isSavingProject}
+									className="inline-flex h-8 w-6 items-center justify-center rounded-[5px] border border-foreground/10 bg-foreground/5 p-0 text-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+									title={t("common.actions.saveProjectAs", "Save Project As…")}
+									aria-label={t(
+										"common.actions.saveProjectAs",
+										"Save Project As…",
+									)}
+								>
+									<ChevronDown className="h-3.5 w-3.5" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" sideOffset={10}>
+								<DropdownMenuItem
+									onSelect={() => void handleSaveProjectAsButtonClick()}
+								>
+									{t("common.actions.saveProjectAs", "Save Project As…")}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 					<DropdownMenu
 						open={showExportDropdown}
 						onOpenChange={setShowExportDropdown}
