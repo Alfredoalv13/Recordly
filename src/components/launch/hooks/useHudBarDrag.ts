@@ -32,7 +32,13 @@ export function useHudBarDrag({
 	>(null);
 	const isHudDraggingRef = useRef(false);
 	const hudDragMoveRafRef = useRef<number | null>(null);
-	const hudDragPendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
+	const hudDragPendingPointerRef = useRef<{
+		clientX: number;
+		clientY: number;
+		screenX: number;
+		screenY: number;
+	} | null>(null);
+	const hudRelocateInFlightRef = useRef(false);
 
 	useEffect(() => {
 		recordingHudOffsetRef.current = recordingHudOffset;
@@ -68,13 +74,51 @@ export function useHudBarDrag({
 		};
 	}, [hudBarRef]);
 
+	const requestHudRelocate = useCallback((screenX: number, screenY: number, pointerId: number) => {
+		if (hudRelocateInFlightRef.current || !window.electronAPI?.hudOverlayRelocateToPoint) {
+			return;
+		}
+
+		hudRelocateInFlightRef.current = true;
+		window.electronAPI
+			.hudOverlayRelocateToPoint(screenX, screenY)
+			.then((result) => {
+				const dragState = hudDragStartRef.current;
+				if (!result?.moved || !dragState || dragState.pointerId !== pointerId) {
+					return;
+				}
+
+				// The real window just jumped to the adjacent display. Shift the
+				// drag's reference points by the same amount so the next frame's
+				// delta reflects pure pointer movement instead of the window jump,
+				// keeping the widget tracking the cursor without visually snapping.
+				dragState.startX -= result.deltaX;
+				dragState.startY -= result.deltaY;
+				dragState.initialLeft -= result.deltaX;
+				dragState.initialTop -= result.deltaY;
+			})
+			.catch(() => {
+				// Best-effort: if the round trip fails, the drag simply stays
+				// clamped to the current display, same as before this feature.
+			})
+			.finally(() => {
+				hudRelocateInFlightRef.current = false;
+			});
+	}, []);
+
 	const handleHudBarPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
 		const dragState = hudDragStartRef.current;
 		if (!dragState || dragState.pointerId !== event.pointerId) {
 			return;
 		}
 
-		hudDragPendingPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
+		hudDragPendingPointerRef.current = {
+			clientX: event.clientX,
+			clientY: event.clientY,
+			screenX: event.screenX,
+			screenY: event.screenY,
+		};
+		const pointerId = event.pointerId;
 		if (hudDragMoveRafRef.current !== null) {
 			return;
 		}
@@ -110,8 +154,15 @@ export function useHudBarDrag({
 			if (hudBarTransformRef.current) {
 				hudBarTransformRef.current.style.transform = `translate3d(${nextOffset.x}px, ${nextOffset.y}px, 0)`;
 			}
+
+			// The widget is pressed against an edge of the current display's
+			// window - ask the main process to hop the real window onto
+			// whichever display the cursor is now over, if any.
+			if (unclampedLeft !== clampedLeft || unclampedTop !== clampedTop) {
+				requestHudRelocate(pointer.screenX, pointer.screenY, pointerId);
+			}
 		});
-	}, []);
+	}, [requestHudRelocate]);
 
 	const handleHudBarPointerUp = useCallback((event: PointerEvent<HTMLDivElement>) => {
 		const dragState = hudDragStartRef.current;
