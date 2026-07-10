@@ -39,6 +39,8 @@ const WEBCAM_FRAME_RATE = 30;
 const WEBCAM_SUFFIX = "-webcam";
 const MICROPHONE_FALLBACK_ERROR_TOAST_ID = "recording-microphone-fallback-error";
 const MICROPHONE_SIDECAR_ERROR_TOAST_ID = "recording-microphone-sidecar-error";
+const WEBCAM_UNEXPECTED_STOP_TOAST_ID = "recording-webcam-unexpected-stop";
+const BACKGROUND_FINALIZATION_ERROR_TOAST_ID = "recording-background-finalization-error";
 export type BrowserMicrophoneProfile =
 	| "processed"
 	| "no-agc"
@@ -356,6 +358,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const webcamStopPromise = useRef<Promise<string | null> | null>(null);
 	const webcamStopResolver = useRef<((path: string | null) => void) | null>(null);
 	const resolvedWebcamPath = useRef<string | null>(null);
+	const webcamUnexpectedStopNotified = useRef(false);
 	const accumulatedPausedDurationMs = useRef(0);
 	const pauseStartedAtMs = useRef<number | null>(null);
 	const micFallbackRecorder = useRef<MediaRecorder | null>(null);
@@ -987,13 +990,40 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				...(mimeType ? { mimeType } : {}),
 			});
 
+			webcamUnexpectedStopNotified.current = false;
+			for (const track of webcamStream.current.getVideoTracks()) {
+				// Fires only for a track ending on its own (device unplugged, OS
+				// revoked access, another app took the camera, etc.) - not for our
+				// own track.stop() calls below, which the spec exempts from this
+				// event. A silent early end here previously produced a webcam file
+				// that was simply shorter than the rest of the recording, with
+				// nothing logged and no indication to the user.
+				track.onended = () => {
+					if (webcamUnexpectedStopNotified.current) {
+						return;
+					}
+					webcamUnexpectedStopNotified.current = true;
+					const elapsedMs = webcamStartTime.current
+						? Date.now() - webcamStartTime.current
+						: null;
+					console.error(
+						`[useScreenRecorder] Webcam track ended unexpectedly${elapsedMs !== null ? ` ${Math.round(elapsedMs / 1000)}s into the recording` : ""}; the webcam layer will be shorter than the rest of the recording.`,
+					);
+					toast.error(
+						"Your webcam stopped responding during this recording. The rest of the recording won't include your camera.",
+						{ id: WEBCAM_UNEXPECTED_STOP_TOAST_ID, duration: 10000 },
+					);
+				};
+			}
+
 			webcamRecorder.current = recorder;
 			recorder.ondataavailable = (event) => {
 				if (event.data && event.data.size > 0) {
 					webcamChunks.current.push(event.data);
 				}
 			};
-			recorder.onerror = () => {
+			recorder.onerror = (event) => {
+				console.error("[useScreenRecorder] Webcam MediaRecorder error:", event);
 				webcamStopResolver.current?.(null);
 				webcamStopResolver.current = null;
 			};
@@ -1175,7 +1205,16 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 							`[PERF:RENDERER] Background Stop Sequence: COMPLETED in ${(performance.now() - stopStart).toFixed(2)}ms`,
 						);
 					} catch (bgError) {
+						// This chain is the only place that attaches the webcam path
+						// (and, on Windows, the muxed audio) to the session - if it
+						// throws, those assets never reach the editor with no other
+						// indication anything went wrong, so surface it explicitly
+						// rather than leaving the user to notice they're missing.
 						console.error("Error in background finalization:", bgError);
+						toast.error(
+							"Finishing this recording ran into a problem - the webcam layer or audio track may be missing from the editor.",
+							{ id: BACKGROUND_FINALIZATION_ERROR_TOAST_ID, duration: 10000 },
+						);
 					} finally {
 						// After all background tasks are done (webcam, mic sidecars, muxing),
 						// we can safely close the HUD window to release hardware and resources.

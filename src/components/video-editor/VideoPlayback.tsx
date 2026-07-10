@@ -215,6 +215,7 @@ type PixiRendererAttempt = {
 	message: string;
 };
 const PIXI_RENDERER_INIT_TIMEOUT_MS = 8_000;
+const VIDEO_RENDERABLE_TIMEOUT_MS = 15_000;
 
 function isCanvasRenderer(application: Application): boolean {
 	const rendererName = application?.renderer?.constructor?.name?.toLowerCase();
@@ -2720,12 +2721,31 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				videoReadyRafRef.current = null;
 			}
 
+			const waitForRenderableFrameStartedAt = performance.now();
 			const waitForRenderableFrame = () => {
 				const hasDimensions = video.videoWidth > 0 && video.videoHeight > 0;
 				const hasData = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
 				if (hasDimensions && hasData) {
 					videoReadyRafRef.current = null;
 					setVideoReady(true);
+					return;
+				}
+				// This poll has no natural end condition of its own - if the video
+				// never becomes renderable (a stalled decode, a media-server hiccup,
+				// a file still being flushed), it previously spun forever with the
+				// preview area just staying blank and nothing telling the user why.
+				if (
+					performance.now() - waitForRenderableFrameStartedAt >
+					VIDEO_RENDERABLE_TIMEOUT_MS
+				) {
+					videoReadyRafRef.current = null;
+					console.error("[VideoPlayback] Timed out waiting for a renderable video frame:", {
+						videoPath,
+						readyState: video.readyState,
+						videoWidth: video.videoWidth,
+						videoHeight: video.videoHeight,
+					});
+					onError("Failed to load video (timed out waiting for a playable frame)");
 					return;
 				}
 				videoReadyRafRef.current = requestAnimationFrame(waitForRenderableFrame);
