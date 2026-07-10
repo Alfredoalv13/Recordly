@@ -401,12 +401,12 @@ ipcMain.on("hud-overlay-drag", (_event, phase: string, screenX: number, screenY:
 // which clamps the widget's translate3d offset to window.innerWidth/Height -
 // can never move the widget past that display's edge. When a drag pushes
 // against that edge, the renderer calls this to relocate the real window to
-// whichever display is now under the cursor, and reports back how far it
-// moved so the renderer can re-baseline its drag math and keep the widget
-// tracking the cursor without a jump.
+// whichever display is now under the cursor. The renderer re-measures the
+// widget's rendered position from scratch on the next frame, so it picks up
+// wherever the window ends up without needing to know how far it moved.
 ipcMain.handle("hud-overlay-relocate-to-point", (_event, screenX: number, screenY: number) => {
 	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed() || !isHudOverlayCanvasActive()) {
-		return { moved: false, deltaX: 0, deltaY: 0 };
+		return { moved: false };
 	}
 
 	const targetDisplay = getScreen().getDisplayNearestPoint({
@@ -416,18 +416,19 @@ ipcMain.handle("hud-overlay-relocate-to-point", (_event, screenX: number, screen
 	const currentBounds = hudOverlayWindow.getBounds();
 	const nextBounds = getHudOverlayWindowBounds(targetDisplay.workArea, true);
 
-	if (nextBounds.x === currentBounds.x && nextBounds.y === currentBounds.y) {
-		return { moved: false, deltaX: 0, deltaY: 0 };
+	if (
+		nextBounds.x === currentBounds.x &&
+		nextBounds.y === currentBounds.y &&
+		nextBounds.width === currentBounds.width &&
+		nextBounds.height === currentBounds.height
+	) {
+		return { moved: false };
 	}
 
 	hudOverlayWindow.setBounds(nextBounds, false);
 	positionUpdateToastWindow();
 
-	return {
-		moved: true,
-		deltaX: nextBounds.x - currentBounds.x,
-		deltaY: nextBounds.y - currentBounds.y,
-	};
+	return { moved: true };
 });
 
 ipcMain.on("hud-overlay-hide", () => {

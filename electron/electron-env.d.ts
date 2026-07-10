@@ -209,7 +209,7 @@ interface Window {
 		hudOverlayRelocateToPoint: (
 			screenX: number,
 			screenY: number,
-		) => Promise<{ moved: boolean; deltaX: number; deltaY: number }>;
+		) => Promise<{ moved: boolean }>;
 		hudOverlayHide: () => void;
 		hudOverlayClose: () => void;
 		hudOverlayRendererReady: () => void;

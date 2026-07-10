@@ -173,10 +173,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => {
 		ipcRenderer.send("hud-overlay-drag", phase, screenX, screenY);
 	},
-	hudOverlayRelocateToPoint: (
-		screenX: number,
-		screenY: number,
-	): Promise<{ moved: boolean; deltaX: number; deltaY: number }> => {
+	hudOverlayRelocateToPoint: (screenX: number, screenY: number): Promise<{ moved: boolean }> => {
 		return ipcRenderer.invoke("hud-overlay-relocate-to-point", screenX, screenY);
 	},
 	hudOverlayHide: () => {
