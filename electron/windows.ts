@@ -187,11 +187,20 @@ function getHudOverlayDisplay() {
 	return getScreen().getPrimaryDisplay();
 }
 
+// True while the HUD window is the full-display, click-through canvas that
+// hosts the draggable widget (mouse passthrough supported and not actively
+// recording). Only in this mode does the window span an entire display, so
+// only in this mode can it usefully be relocated to follow a drag across a
+// monitor boundary - see hud-overlay-relocate-to-point below.
+function isHudOverlayCanvasActive(): boolean {
+	return isHudOverlayMousePassthroughSupported() && !hudOverlayRecordingActive;
+}
+
 function getHudOverlayBounds() {
 	const { workArea } = getHudOverlayDisplay();
 	return getHudOverlayWindowBounds(
 		workArea,
-		isHudOverlayMousePassthroughSupported() && !hudOverlayRecordingActive,
+		isHudOverlayCanvasActive(),
 		hudOverlayFallbackExpanded,
 	);
 }
@@ -385,6 +394,41 @@ ipcMain.on("hud-overlay-drag", (_event, phase: string, screenX: number, screenY:
 		hudDragLastCursor = null;
 		hudDragFixedSize = null;
 	}
+});
+
+// The HUD canvas window (see isHudOverlayCanvasActive above) is sized to a
+// single display's work area, so the CSS-driven drag in useHudBarDrag.ts -
+// which clamps the widget's translate3d offset to window.innerWidth/Height -
+// can never move the widget past that display's edge. When a drag pushes
+// against that edge, the renderer calls this to relocate the real window to
+// whichever display is now under the cursor. The renderer re-measures the
+// widget's rendered position from scratch on the next frame, so it picks up
+// wherever the window ends up without needing to know how far it moved.
+ipcMain.handle("hud-overlay-relocate-to-point", (_event, screenX: number, screenY: number) => {
+	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed() || !isHudOverlayCanvasActive()) {
+		return { moved: false };
+	}
+
+	const targetDisplay = getScreen().getDisplayNearestPoint({
+		x: Math.round(screenX),
+		y: Math.round(screenY),
+	});
+	const currentBounds = hudOverlayWindow.getBounds();
+	const nextBounds = getHudOverlayWindowBounds(targetDisplay.workArea, true);
+
+	if (
+		nextBounds.x === currentBounds.x &&
+		nextBounds.y === currentBounds.y &&
+		nextBounds.width === currentBounds.width &&
+		nextBounds.height === currentBounds.height
+	) {
+		return { moved: false };
+	}
+
+	hudOverlayWindow.setBounds(nextBounds, false);
+	positionUpdateToastWindow();
+
+	return { moved: true };
 });
 
 ipcMain.on("hud-overlay-hide", () => {

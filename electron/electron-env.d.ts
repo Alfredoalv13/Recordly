@@ -206,6 +206,10 @@ interface Window {
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
 		hudOverlaySetSourceSelectionActive: (active: boolean) => void;
 		hudOverlayDrag: (phase: "start" | "move" | "end", screenX: number, screenY: number) => void;
+		hudOverlayRelocateToPoint: (
+			screenX: number,
+			screenY: number,
+		) => Promise<{ moved: boolean }>;
 		hudOverlayHide: () => void;
 		hudOverlayClose: () => void;
 		hudOverlayRendererReady: () => void;
