@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	type MutableRefObject,
+	type PointerEvent,
+} from "react";
 import { canShowFloatingWebcamPreview } from "../floatingWebcamPreview";
 
 const WEBCAM_PREVIEW_DRAG_THRESHOLD = 6;
@@ -10,12 +17,21 @@ export function useWebcamPreviewOverlay({
 	showWebcamControls,
 	webcamPopoverOpen,
 	hudOverlayMousePassthroughSupported,
+	previewStreamRef,
 }: {
 	webcamEnabled: boolean;
 	webcamDeviceId?: string;
 	showWebcamControls: boolean;
 	webcamPopoverOpen: boolean;
 	hudOverlayMousePassthroughSupported: boolean | null;
+	/**
+	 * Shared with useScreenRecorder so recording can reuse this same live
+	 * camera track (via clone + applyConstraints) instead of opening a second,
+	 * competing getUserMedia session to the same physical device - two
+	 * concurrent sessions at different resolutions cause the OS to reconfigure
+	 * the camera pipeline, silently killing whichever session isn't renegotiated.
+	 */
+	previewStreamRef: MutableRefObject<MediaStream | null>;
 }) {
 	const [showFloatingWebcamPreview, setShowFloatingWebcamPreview] = useState(true);
 	const [webcamPreviewOffset, setWebcamPreviewOffset] = useState(DEFAULT_WEBCAM_PREVIEW_OFFSET);
@@ -23,7 +39,6 @@ export function useWebcamPreviewOverlay({
 	const webcamPreviewRef = useRef<HTMLVideoElement | null>(null);
 	const recordingWebcamPreviewRef = useRef<HTMLVideoElement | null>(null);
 	const recordingWebcamPreviewContainerRef = useRef<HTMLDivElement | null>(null);
-	const previewStreamRef = useRef<MediaStream | null>(null);
 	const previewDragMoveRafRef = useRef<number | null>(null);
 	const previewDragPendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
 	const webcamPreviewDragStartRef = useRef<{
@@ -181,7 +196,7 @@ export function useWebcamPreviewOverlay({
 				// Ignore autoplay interruptions while the preview element mounts.
 			});
 		}
-	}, []);
+	}, [previewStreamRef]);
 
 	const setWebcamPreviewNode = useCallback(
 		(node: HTMLVideoElement | null) => {
@@ -266,7 +281,7 @@ export function useWebcamPreviewOverlay({
 				previewStreamRef.current = null;
 			}
 		};
-	}, [attachPreviewStreamToNode, shouldStreamWebcamPreview, webcamDeviceId]);
+	}, [attachPreviewStreamToNode, shouldStreamWebcamPreview, webcamDeviceId, previewStreamRef]);
 
 	return {
 		showFloatingWebcamPreview,
