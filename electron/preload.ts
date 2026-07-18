@@ -797,6 +797,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			thumbnailDataUrl,
 		);
 	},
+	saveFcpxmlExport: (xmlContent: string, suggestedFileNameBase: string) => {
+		return ipcRenderer.invoke("save-fcpxml-export", xmlContent, suggestedFileNameBase);
+	},
 	loadProjectFile: () => {
 		return ipcRenderer.invoke("load-project-file");
 	},

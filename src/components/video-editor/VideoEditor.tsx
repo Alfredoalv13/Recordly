@@ -7,6 +7,7 @@ import {
 	Crop,
 	Cursor,
 	DownloadSimple as Download,
+	FilmSlate,
 	FloppyDisk,
 	FolderOpen,
 	Gear,
@@ -79,6 +80,11 @@ import {
 	canUseInMemoryExportSaveFallback,
 	describeBlockedInMemoryExportSave,
 } from "@/lib/exporter/exportSavePolicy";
+import {
+	buildFcpxml,
+	type FcpxmlVideoAsset,
+	type FcpxmlWebcamAsset,
+} from "@/lib/exporter/fcpxml/buildFcpxml";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import {
@@ -385,6 +391,7 @@ export default function VideoEditor() {
 	const [projectNameDraft, setProjectNameDraft] = useState("");
 	const [isSavingProjectName, setIsSavingProjectName] = useState(false);
 	const [isSavingProject, setIsSavingProject] = useState(false);
+	const [isExportingFcpxml, setIsExportingFcpxml] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isPlaying, setIsPlaying] = useState(false);
@@ -1044,8 +1051,8 @@ export default function VideoEditor() {
 		// before-quit, but we still log failures (both rejected promises and
 		// resolved { success: false } results) so an orphaned multi-GB temp
 		// file is discoverable instead of silently consuming disk space.
-		void window.electronAPI.discardExportedTemp
-			?.(tempFilePath)
+		void window.electronAPI
+			.discardExportedTemp?.(tempFilePath)
 			?.then((result) => {
 				if (!result?.success) {
 					console.warn(
@@ -4233,6 +4240,76 @@ export default function VideoEditor() {
 		});
 	}, []);
 
+	const handleExportFcpxml = useCallback(async () => {
+		if (!currentSourcePath) {
+			toast.error("No video loaded");
+			return;
+		}
+
+		setIsExportingFcpxml(true);
+		try {
+			const previewVideo = videoPlaybackRef.current?.video ?? null;
+			const videoAsset: FcpxmlVideoAsset = {
+				path: currentSourcePath,
+				name:
+					currentSourcePath
+						.split(/[\\/]/)
+						.pop()
+						?.replace(/\.[^.]+$/, "") || "VybeClip Export",
+				durationMs: Math.max(0, duration * 1000),
+				width: previewVideo?.videoWidth || 1920,
+				height: previewVideo?.videoHeight || 1080,
+				frameRate: mp4FrameRate,
+				hasAudio: true,
+			};
+
+			const webcamAsset: FcpxmlWebcamAsset | null =
+				webcam.enabled && webcam.sourcePath
+					? { path: webcam.sourcePath, width: 1280, height: 720 }
+					: null;
+
+			const xml = buildFcpxml(
+				{
+					...currentPersistedEditorState,
+					speedRegions: effectiveSpeedRegions,
+					// zoomRegions are authored in timeline (post-trim) time, but
+					// buildFcpxml operates on source-time segments — map them the
+					// same way the real render/export pipeline does.
+					zoomRegions: effectiveZoomRegions,
+				},
+				videoAsset,
+				webcamAsset,
+			);
+
+			const result = await window.electronAPI.saveFcpxmlExport(xml, videoAsset.name);
+			if (result.canceled) {
+				return;
+			}
+			if (!result.success) {
+				toast.error(result.message || "Failed to export FCPXML");
+				return;
+			}
+			if (result.path) {
+				showExportSuccessToast(result.path);
+			} else {
+				toast.success("FCPXML exported successfully");
+			}
+		} catch (error) {
+			toast.error(getErrorMessage(error));
+		} finally {
+			setIsExportingFcpxml(false);
+		}
+	}, [
+		currentSourcePath,
+		duration,
+		mp4FrameRate,
+		webcam,
+		currentPersistedEditorState,
+		effectiveSpeedRegions,
+		effectiveZoomRegions,
+		showExportSuccessToast,
+	]);
+
 	const handleExport = useCallback(
 		async (settings: ExportSettings) => {
 			if (!videoPath) {
@@ -5625,6 +5702,30 @@ export default function VideoEditor() {
 							</DropdownMenuContent>
 						</DropdownMenu>
 					</div>
+					<Button
+						type="button"
+						variant="ghost"
+						onClick={() => void handleExportFcpxml()}
+						disabled={isExportingFcpxml}
+						className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[5px] border border-foreground/10 bg-foreground/5 px-3 text-foreground transition-colors hover:bg-foreground/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+						title={t(
+							"common.actions.exportFcpxml",
+							"Export FCPXML for DaVinci Resolve / Final Cut",
+						)}
+						aria-label={t(
+							"common.actions.exportFcpxml",
+							"Export FCPXML for DaVinci Resolve / Final Cut",
+						)}
+					>
+						{isExportingFcpxml ? (
+							<CircleNotch className="h-4 w-4 animate-spin" />
+						) : (
+							<FilmSlate className="h-4 w-4" />
+						)}
+						<span className="text-sm font-medium tracking-tight">
+							{t("common.actions.exportFcpxmlShort", "FCPXML")}
+						</span>
+					</Button>
 					<DropdownMenu
 						open={showExportDropdown}
 						onOpenChange={setShowExportDropdown}

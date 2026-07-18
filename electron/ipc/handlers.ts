@@ -2,6 +2,7 @@ import { BrowserWindow } from "electron";
 import { registerAssetHandlers } from "./register/assets";
 import { registerCaptionHandlers } from "./register/captions";
 import { registerExportHandlers } from "./register/export";
+import { registerExportFcpxmlHandlers } from "./register/exportFcpxml";
 import { registerPermissionHandlers } from "./register/permissions";
 import { registerProjectHandlers } from "./register/project";
 import { registerRecordingHandlers } from "./register/recording";
@@ -66,6 +67,7 @@ export function registerIpcHandlers(
 	registerPermissionHandlers();
 	registerAssetHandlers();
 	registerExportHandlers();
+	registerExportFcpxmlHandlers();
 	registerCaptionHandlers();
 	registerProjectHandlers();
 	registerSettingsHandlers();

@@ -756,6 +756,16 @@ interface Window {
 			canceled?: boolean;
 			error?: string;
 		}>;
+		saveFcpxmlExport: (
+			xmlContent: string,
+			suggestedFileNameBase: string,
+		) => Promise<{
+			success: boolean;
+			path?: string;
+			message?: string;
+			canceled?: boolean;
+			error?: string;
+		}>;
 		loadProjectFile: () => Promise<{
 			success: boolean;
 			path?: string;
