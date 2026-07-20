@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CountdownOverlay } from "./components/countdown/CountdownOverlay";
+import { HudInteractionContext } from "./components/launch/contexts/HudInteractionContext";
 import { LaunchWindow } from "./components/launch/LaunchWindow";
 import { SourceSelector } from "./components/launch/SourceSelector";
 import { UpdateToastWindow } from "./components/launch/UpdateToastWindow";
@@ -65,7 +66,16 @@ export default function App() {
 				</>
 			);
 		case "source-selector":
-			return <SourceSelector />;
+			// SourceSelector also renders inside LaunchWindow's HUD overlay, where
+			// HudInteractionContext.Provider coordinates click-through for that
+			// transparent window. This standalone window isn't transparent/click-through,
+			// so the mouse enter/leave handlers here are no-ops rather than omitted -
+			// useHudInteraction() throws outside of a provider.
+			return (
+				<HudInteractionContext.Provider value={{ onMouseEnter: () => {}, onMouseLeave: () => {} }}>
+					<SourceSelector />
+				</HudInteractionContext.Provider>
+			);
 		case "countdown":
 			return <CountdownOverlay />;
 		case "update-toast":
