@@ -20,13 +20,22 @@ export function registerPermissionHandlers() {
     // the app bundle gives the new process the same independent launch
     // lineage as double-clicking it in Finder/Dock actually has.
     if (process.platform === "darwin") {
+      // This app enforces requestSingleInstanceLock(). If the new process
+      // spawned below starts up while this one still holds that lock, it
+      // finds "another instance is already running" and immediately quits
+      // itself (see the app.quit() right after requestSingleInstanceLock()
+      // in main.ts) - verified directly that this is exactly what was
+      // silently eating the relaunch: both the old and new process would
+      // end up exited, regardless of how long we waited before app.exit()
+      // below, because that delay only made the old process hold the lock
+      // longer, not shorter. Releasing it explicitly - rather than waiting
+      // for exit to eventually free it - is what actually avoids the race.
+      app.releaseSingleInstanceLock();
       const appBundlePath = path.dirname(path.dirname(path.dirname(process.execPath)));
       spawn("/usr/bin/open", [appBundlePath], { detached: true, stdio: "ignore" }).unref();
-      // app.exit() tears the process down harder/faster than a normal quit -
-      // verified directly that calling it immediately after spawn() could
-      // kill this process before `open` finished handing off to launchd,
-      // silently dropping the relaunch entirely. Give it a moment first.
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Small safety margin for `open` to hand off to launchd before this
+      // process's own teardown begins.
+      await new Promise((resolve) => setTimeout(resolve, 200));
       app.exit(0);
     } else {
       app.relaunch();
