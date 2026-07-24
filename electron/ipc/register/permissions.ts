@@ -4,7 +4,7 @@ import { app, ipcMain, shell, systemPreferences } from "electron";
 import { getMacPrivacySettingsUrl } from "../utils";
 
 export function registerPermissionHandlers() {
-  ipcMain.handle('relaunch-app', async () => {
+  ipcMain.handle('relaunch-app', () => {
     // macOS caches permission-check results (getMediaAccessStatus, etc.) for
     // the life of the process, so a grant made in System Settings is invisible
     // until the app actually restarts - closing the window isn't enough on
@@ -20,22 +20,26 @@ export function registerPermissionHandlers() {
     // the app bundle gives the new process the same independent launch
     // lineage as double-clicking it in Finder/Dock actually has.
     if (process.platform === "darwin") {
-      // This app enforces requestSingleInstanceLock(). If the new process
-      // spawned below starts up while this one still holds that lock, it
-      // finds "another instance is already running" and immediately quits
-      // itself (see the app.quit() right after requestSingleInstanceLock()
-      // in main.ts) - verified directly that this is exactly what was
-      // silently eating the relaunch: both the old and new process would
-      // end up exited, regardless of how long we waited before app.exit()
-      // below, because that delay only made the old process hold the lock
-      // longer, not shorter. Releasing it explicitly - rather than waiting
-      // for exit to eventually free it - is what actually avoids the race.
+      // Verified directly (with debug logging) that spawning `open` on the
+      // bundle *before* this process has actually exited doesn't start a
+      // second instance at all: macOS's `open` treats an already-running
+      // regular app bundle as "bring it to front", not "launch another one",
+      // regardless of Electron's own requestSingleInstanceLock() state. So
+      // if `open` runs while this process is still alive - even just for a
+      // short fixed delay - it silently re-activates *this* (dying) process
+      // instead of starting a new one, and once this one exits, nothing is
+      // left running.
+      //
+      // The fix has to live outside this process, since once app.exit() is
+      // called nothing else here runs: hand a detached shell script the job
+      // of waiting until this exact pid is actually gone (polling, not a
+      // fixed guess) before it calls `open`. releaseSingleInstanceLock() is
+      // kept too so the new process's own lock check never depends on this
+      // one's exit timing either.
       app.releaseSingleInstanceLock();
       const appBundlePath = path.dirname(path.dirname(path.dirname(process.execPath)));
-      spawn("/usr/bin/open", [appBundlePath], { detached: true, stdio: "ignore" }).unref();
-      // Small safety margin for `open` to hand off to launchd before this
-      // process's own teardown begins.
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      const waitThenReopen = `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.05; done; open ${JSON.stringify(appBundlePath)}`;
+      spawn("/bin/sh", ["-c", waitThenReopen], { detached: true, stdio: "ignore" }).unref();
       app.exit(0);
     } else {
       app.relaunch();
