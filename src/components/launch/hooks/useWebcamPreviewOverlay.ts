@@ -25,20 +25,23 @@ export function useWebcamPreviewOverlay({
 	const recordingWebcamPreviewContainerRef = useRef<HTMLDivElement | null>(null);
 	const previewStreamRef = useRef<MediaStream | null>(null);
 	const previewDragMoveRafRef = useRef<number | null>(null);
-	const previewDragPendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
+	const previewDragPendingPointerRef = useRef<{ screenX: number; screenY: number } | null>(null);
 	const webcamPreviewDragStartRef = useRef<{
 		pointerId: number;
-		startX: number;
-		startY: number;
-		originX: number;
-		originY: number;
-		initialLeft: number;
-		initialTop: number;
+		startScreenX: number;
+		startScreenY: number;
+		// Distance (in CSS px) from the bubble's rendered top-left corner to the
+		// point the user grabbed it at. Unlike a client-coordinate snapshot,
+		// this stays meaningful even if the HUD window itself moves or resizes
+		// mid-drag (see requestWebcamPreviewRelocate below).
+		grabOffsetX: number;
+		grabOffsetY: number;
 		previewWidth: number;
 		previewHeight: number;
 		dragging: boolean;
 	} | null>(null);
 	const isWebcamPreviewDraggingRef = useRef(false);
+	const webcamPreviewRelocateInFlightRef = useRef(false);
 	const showRecordingWebcamPreview =
 		webcamEnabled &&
 		canShowFloatingWebcamPreview(
@@ -73,12 +76,10 @@ export function useWebcamPreviewOverlay({
 			window.electronAPI?.hudOverlaySetIgnoreMouse?.(false);
 			webcamPreviewDragStartRef.current = {
 				pointerId: event.pointerId,
-				startX: event.clientX,
-				startY: event.clientY,
-				originX: webcamPreviewOffsetRef.current.x,
-				originY: webcamPreviewOffsetRef.current.y,
-				initialLeft: previewRect.left,
-				initialTop: previewRect.top,
+				startScreenX: event.screenX,
+				startScreenY: event.screenY,
+				grabOffsetX: event.clientX - previewRect.left,
+				grabOffsetY: event.clientY - previewRect.top,
 				previewWidth: previewRect.width,
 				previewHeight: previewRect.height,
 				dragging: false,
@@ -88,68 +89,136 @@ export function useWebcamPreviewOverlay({
 		[],
 	);
 
-	const handleWebcamPreviewPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
-		const dragState = webcamPreviewDragStartRef.current;
-		if (!dragState || dragState.pointerId !== event.pointerId) {
+	// The HUD window (which the floating preview bubble renders inside) is
+	// sized to a single display's work area, so a drag that reaches its edge
+	// can't go any further on its own. This asks the main process to hop the
+	// real window onto whichever display is now under the cursor - the same
+	// mechanism the HUD control bar uses. It's fire-and-forget:
+	// handleWebcamPreviewPointerMove re-measures the bubble's actual rendered
+	// position every frame (see currentRect below), so whenever the window
+	// does move, the very next frame naturally reconciles against it.
+	const requestWebcamPreviewRelocate = useCallback((screenX: number, screenY: number) => {
+		if (
+			webcamPreviewRelocateInFlightRef.current ||
+			!window.electronAPI?.hudOverlayRelocateToPoint
+		) {
 			return;
 		}
 
-		const deltaX = event.clientX - dragState.startX;
-		const deltaY = event.clientY - dragState.startY;
+		webcamPreviewRelocateInFlightRef.current = true;
+		window.electronAPI
+			.hudOverlayRelocateToPoint(screenX, screenY)
+			.catch(() => {
+				// Best-effort: if the round trip fails, the drag simply stays
+				// clamped to the current display, same as before this feature.
+			})
+			.finally(() => {
+				webcamPreviewRelocateInFlightRef.current = false;
+			});
+	}, []);
 
-		if (!dragState.dragging && Math.hypot(deltaX, deltaY) < WEBCAM_PREVIEW_DRAG_THRESHOLD) {
-			return;
-		}
-
-		if (!dragState.dragging) {
-			dragState.dragging = true;
-			isWebcamPreviewDraggingRef.current = true;
-		}
-
-		previewDragPendingPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
-		if (previewDragMoveRafRef.current !== null) {
-			return;
-		}
-
-		previewDragMoveRafRef.current = requestAnimationFrame(() => {
-			previewDragMoveRafRef.current = null;
-			const latestDragState = webcamPreviewDragStartRef.current;
-			const pointer = previewDragPendingPointerRef.current;
-			if (!latestDragState || !pointer) {
+	const handleWebcamPreviewPointerMove = useCallback(
+		(event: PointerEvent<HTMLDivElement>) => {
+			const dragState = webcamPreviewDragStartRef.current;
+			if (!dragState || dragState.pointerId !== event.pointerId) {
 				return;
 			}
 
-			const latestDeltaX = pointer.clientX - latestDragState.startX;
-			const latestDeltaY = pointer.clientY - latestDragState.startY;
-			const viewportWidth = Math.max(window.innerWidth, window.screen?.width ?? 0);
-			const viewportHeight = Math.max(window.innerHeight, window.screen?.height ?? 0);
-			const unclampedLeft = latestDragState.initialLeft + latestDeltaX;
-			const unclampedTop = latestDragState.initialTop + latestDeltaY;
-			const clampedLeft = Math.min(
-				Math.max(0, unclampedLeft),
-				Math.max(0, viewportWidth - latestDragState.previewWidth),
-			);
-			const clampedTop = Math.min(
-				Math.max(0, unclampedTop),
-				Math.max(0, viewportHeight - latestDragState.previewHeight),
-			);
-
-			const nextOffset = {
-				x: latestDragState.originX + (clampedLeft - latestDragState.initialLeft),
-				y: latestDragState.originY + (clampedTop - latestDragState.initialTop),
-			};
-			webcamPreviewOffsetRef.current = nextOffset;
-			if (recordingWebcamPreviewContainerRef.current) {
-				recordingWebcamPreviewContainerRef.current.style.transform = `translate(${nextOffset.x}px, ${nextOffset.y}px)`;
+			if (!dragState.dragging) {
+				const distance = Math.hypot(
+					event.screenX - dragState.startScreenX,
+					event.screenY - dragState.startScreenY,
+				);
+				if (distance < WEBCAM_PREVIEW_DRAG_THRESHOLD) {
+					return;
+				}
+				dragState.dragging = true;
+				isWebcamPreviewDraggingRef.current = true;
 			}
-		});
-	}, []);
+
+			previewDragPendingPointerRef.current = { screenX: event.screenX, screenY: event.screenY };
+			if (previewDragMoveRafRef.current !== null) {
+				return;
+			}
+
+			previewDragMoveRafRef.current = requestAnimationFrame(() => {
+				previewDragMoveRafRef.current = null;
+				const latestDragState = webcamPreviewDragStartRef.current;
+				const pointer = previewDragPendingPointerRef.current;
+				const previewContainer = recordingWebcamPreviewContainerRef.current;
+				if (!latestDragState || !pointer || !previewContainer) {
+					return;
+				}
+
+				// Target position in absolute screen coordinates, derived from the
+				// cursor's real screen position and the fixed grab offset. Using
+				// window.screenX/screenY (which always reflects the HUD window's
+				// *current* position) rather than a delta from drag start means this
+				// stays correct even if the window has moved since the last frame.
+				const targetClientLeft =
+					pointer.screenX - latestDragState.grabOffsetX - window.screenX;
+				const targetClientTop =
+					pointer.screenY - latestDragState.grabOffsetY - window.screenY;
+				const viewportWidth = window.innerWidth;
+				const viewportHeight = window.innerHeight;
+				const clampedLeft = Math.min(
+					Math.max(0, targetClientLeft),
+					Math.max(0, viewportWidth - latestDragState.previewWidth),
+				);
+				const clampedTop = Math.min(
+					Math.max(0, targetClientTop),
+					Math.max(0, viewportHeight - latestDragState.previewHeight),
+				);
+
+				// Re-measure the bubble's actual rendered rect (rather than trusting
+				// a snapshot from drag start) so a mid-drag resize/relocate of the
+				// HUD window is absorbed automatically.
+				const currentRect = previewContainer.getBoundingClientRect();
+				const nextOffset = {
+					x: webcamPreviewOffsetRef.current.x + (clampedLeft - currentRect.left),
+					y: webcamPreviewOffsetRef.current.y + (clampedTop - currentRect.top),
+				};
+				webcamPreviewOffsetRef.current = nextOffset;
+				previewContainer.style.transform = `translate(${nextOffset.x}px, ${nextOffset.y}px)`;
+
+				// The bubble is pressed against an edge of the current display's
+				// window - ask the main process to hop the real window onto
+				// whichever display the cursor is now over, if any.
+				if (targetClientLeft !== clampedLeft || targetClientTop !== clampedTop) {
+					requestWebcamPreviewRelocate(pointer.screenX, pointer.screenY);
+				}
+			});
+		},
+		[requestWebcamPreviewRelocate],
+	);
 
 	const handleWebcamPreviewPointerUp = useCallback((event: PointerEvent<HTMLDivElement>) => {
 		const dragState = webcamPreviewDragStartRef.current;
 		if (!dragState || dragState.pointerId !== event.pointerId) {
 			return;
 		}
+
+		const previewContainer = recordingWebcamPreviewContainerRef.current;
+		if (previewContainer) {
+			const targetClientLeft = event.screenX - dragState.grabOffsetX - window.screenX;
+			const targetClientTop = event.screenY - dragState.grabOffsetY - window.screenY;
+			const viewportWidth = window.innerWidth;
+			const viewportHeight = window.innerHeight;
+			const clampedLeft = Math.min(
+				Math.max(0, targetClientLeft),
+				Math.max(0, viewportWidth - dragState.previewWidth),
+			);
+			const clampedTop = Math.min(
+				Math.max(0, targetClientTop),
+				Math.max(0, viewportHeight - dragState.previewHeight),
+			);
+			const currentRect = previewContainer.getBoundingClientRect();
+			webcamPreviewOffsetRef.current = {
+				x: webcamPreviewOffsetRef.current.x + (clampedLeft - currentRect.left),
+				y: webcamPreviewOffsetRef.current.y + (clampedTop - currentRect.top),
+			};
+		}
+
 		if (previewDragMoveRafRef.current !== null) {
 			cancelAnimationFrame(previewDragMoveRafRef.current);
 			previewDragMoveRafRef.current = null;
