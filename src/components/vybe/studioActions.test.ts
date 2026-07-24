@@ -11,6 +11,7 @@ function createApi() {
 		showRecordingControls: vi.fn().mockResolvedValue({ success: true }),
 		openSourceSelector: vi.fn().mockResolvedValue(undefined),
 		getPlatform: vi.fn().mockResolvedValue("darwin"),
+		getSources: vi.fn().mockResolvedValue([]),
 		getScreenRecordingPermissionStatus: vi
 			.fn()
 			.mockResolvedValue({ success: true, status: "granted" }),
@@ -50,8 +51,25 @@ describe("VybeClip Studio actions", () => {
 		});
 
 		await expect(startStudioRecording(api)).rejects.toThrow("Enable Screen Recording");
+		expect(api.getSources).toHaveBeenCalledOnce();
 		expect(api.openScreenRecordingPreferences).toHaveBeenCalledOnce();
 		expect(api.showRecordingControls).not.toHaveBeenCalled();
+	});
+
+	it("triggers the real macOS permission prompt via getSources before giving up", async () => {
+		const api = createApi();
+		// First check: not yet determined. After the getSources call (which is
+		// what actually triggers macOS's native prompt), the user allows it.
+		api.getScreenRecordingPermissionStatus
+			.mockResolvedValueOnce({ success: true, status: "not-determined" })
+			.mockResolvedValueOnce({ success: true, status: "granted" });
+
+		await startStudioRecording(api);
+
+		expect(api.getSources).toHaveBeenCalledOnce();
+		expect(api.openScreenRecordingPreferences).not.toHaveBeenCalled();
+		expect(api.showRecordingControls).toHaveBeenCalledOnce();
+		expect(api.openSourceSelector).toHaveBeenCalledOnce();
 	});
 
 	it("opens Accessibility settings instead of the HUD when permission is missing", async () => {

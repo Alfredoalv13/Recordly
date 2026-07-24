@@ -4,6 +4,7 @@ type StudioElectronApi = Pick<
 	| "getAccessibilityPermissionStatus"
 	| "getPlatform"
 	| "getScreenRecordingPermissionStatus"
+	| "getSources"
 	| "openAccessibilityPreferences"
 	| "openProjectFileAtPath"
 	| "openScreenRecordingPreferences"
@@ -45,7 +46,20 @@ export async function getStudioPermissionState(
 }
 
 export async function startStudioRecording(api: StudioElectronApi) {
-	const permissions = await getStudioPermissionState(api);
+	let permissions = await getStudioPermissionState(api);
+
+	if (!permissions.screenRecordingGranted) {
+		// macOS has no API to programmatically request Screen Recording access
+		// (unlike camera/microphone) - only an actual capture-related call
+		// triggers the native system prompt. getMediaAccessStatus() is a passive
+		// read, so if this app has never been through that prompt, jumping
+		// straight to System Settings leaves nothing there for the user to
+		// grant. Trigger the real prompt now; if the user already declined it
+		// before, this just fails silently like the status check did.
+		await api.getSources({ types: ["screen"], thumbnailSize: { width: 1, height: 1 } }).catch(() => []);
+		permissions = await getStudioPermissionState(api);
+	}
+
 	if (!permissions.screenRecordingGranted) {
 		await api.openScreenRecordingPreferences();
 		throw new Error("Enable Screen Recording in System Settings, then reopen VybeClip");
