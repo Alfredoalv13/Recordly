@@ -1,5 +1,5 @@
 import { fixWebmDuration } from "@fix-webm-duration/fix";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getEffectiveRecordingDurationMs } from "@/lib/mediaTiming";
 import {
@@ -37,6 +37,13 @@ const WEBCAM_WIDTH = 1280;
 const WEBCAM_HEIGHT = 720;
 const WEBCAM_FRAME_RATE = 30;
 const WEBCAM_SUFFIX = "-webcam";
+// Mirrors the idle preview's own getUserMedia constraints in
+// useWebcamPreviewOverlay.ts - used to hand the shared camera track back to
+// a lower resolution once recording (which needs WEBCAM_WIDTH/HEIGHT above)
+// stops, so the live preview doesn't stay pinned to recording quality.
+const WEBCAM_PREVIEW_WIDTH = 320;
+const WEBCAM_PREVIEW_HEIGHT = 320;
+const WEBCAM_PREVIEW_FRAME_RATE = 24;
 const MICROPHONE_FALLBACK_ERROR_TOAST_ID = "recording-microphone-fallback-error";
 const MICROPHONE_SIDECAR_ERROR_TOAST_ID = "recording-microphone-sidecar-error";
 const WEBCAM_UNEXPECTED_STOP_TOAST_ID = "recording-webcam-unexpected-stop";
@@ -321,7 +328,19 @@ async function createAudioInputDeviceSnapshot(): Promise<
 	return audioInputs.length > 0 ? audioInputs : null;
 }
 
-export function useScreenRecorder(): UseScreenRecorderReturn {
+export function useScreenRecorder({
+	webcamPreviewStreamRef,
+}: {
+	/**
+	 * The live webcam preview's stream (owned by useWebcamPreviewOverlay), if
+	 * any. When present and live, recording reuses this same camera track
+	 * instead of opening a second, competing getUserMedia session - two
+	 * concurrent sessions to the same physical camera at different
+	 * resolutions cause the OS to reconfigure the camera pipeline and
+	 * silently kill whichever session isn't renegotiated.
+	 */
+	webcamPreviewStreamRef?: RefObject<MediaStream | null>;
+} = {}): UseScreenRecorderReturn {
 	const [recording, setRecording] = useState(false);
 	const [paused, setPaused] = useState(false);
 	const [starting, setStarting] = useState(false);
@@ -359,6 +378,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const webcamStopResolver = useRef<((path: string | null) => void) | null>(null);
 	const resolvedWebcamPath = useRef<string | null>(null);
 	const webcamUnexpectedStopNotified = useRef(false);
+	const webcamUsesBorrowedTrack = useRef(false);
 	const accumulatedPausedDurationMs = useRef(0);
 	const pauseStartedAtMs = useRef<number | null>(null);
 	const micFallbackRecorder = useRef<MediaRecorder | null>(null);
@@ -960,22 +980,68 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			return;
 		}
 
+		const restorePreviewTrackResolution = () => {
+			if (!webcamUsesBorrowedTrack.current) {
+				return;
+			}
+			webcamUsesBorrowedTrack.current = false;
+			webcamPreviewStreamRef?.current
+				?.getVideoTracks()[0]
+				?.applyConstraints({
+					width: { ideal: WEBCAM_PREVIEW_WIDTH },
+					height: { ideal: WEBCAM_PREVIEW_HEIGHT },
+					frameRate: { ideal: WEBCAM_PREVIEW_FRAME_RATE },
+				})
+				.catch(() => {
+					// Best-effort: leave the shared preview track at recording
+					// resolution rather than fail the cleanup path over it.
+				});
+		};
+
 		try {
-			webcamStream.current = await navigator.mediaDevices.getUserMedia({
-				video: webcamDeviceId
-					? {
-							deviceId: { exact: webcamDeviceId },
-							width: { ideal: WEBCAM_WIDTH },
-							height: { ideal: WEBCAM_HEIGHT },
-							frameRate: { ideal: WEBCAM_FRAME_RATE, max: WEBCAM_FRAME_RATE },
-						}
-					: {
-							width: { ideal: WEBCAM_WIDTH },
-							height: { ideal: WEBCAM_HEIGHT },
-							frameRate: { ideal: WEBCAM_FRAME_RATE, max: WEBCAM_FRAME_RATE },
-						},
-				audio: false,
-			});
+			const previewTrack = webcamPreviewStreamRef?.current?.getVideoTracks()[0] ?? null;
+			const previewTrackSettings = previewTrack?.getSettings();
+			const canBorrowPreviewTrack =
+				previewTrack != null &&
+				previewTrack.readyState === "live" &&
+				(!webcamDeviceId || previewTrackSettings?.deviceId === webcamDeviceId);
+
+			webcamUsesBorrowedTrack.current = canBorrowPreviewTrack;
+
+			if (canBorrowPreviewTrack && previewTrack) {
+				try {
+					await previewTrack.applyConstraints({
+						width: { ideal: WEBCAM_WIDTH },
+						height: { ideal: WEBCAM_HEIGHT },
+						frameRate: { ideal: WEBCAM_FRAME_RATE, max: WEBCAM_FRAME_RATE },
+					});
+				} catch (constraintError) {
+					console.warn(
+						"[useScreenRecorder] Failed to raise webcam resolution for recording; continuing at preview resolution:",
+						constraintError,
+					);
+				}
+				// Record from a clone, not the shared track itself, so stopping the
+				// recording (which stops webcamStream.current's tracks) doesn't also
+				// kill the live preview's track.
+				webcamStream.current = new MediaStream([previewTrack.clone()]);
+			} else {
+				webcamStream.current = await navigator.mediaDevices.getUserMedia({
+					video: webcamDeviceId
+						? {
+								deviceId: { exact: webcamDeviceId },
+								width: { ideal: WEBCAM_WIDTH },
+								height: { ideal: WEBCAM_HEIGHT },
+								frameRate: { ideal: WEBCAM_FRAME_RATE, max: WEBCAM_FRAME_RATE },
+							}
+						: {
+								width: { ideal: WEBCAM_WIDTH },
+								height: { ideal: WEBCAM_HEIGHT },
+								frameRate: { ideal: WEBCAM_FRAME_RATE, max: WEBCAM_FRAME_RATE },
+							},
+					audio: false,
+				});
+			}
 
 			const mimeType = selectWebcamMimeType();
 			webcamChunks.current = [];
@@ -1067,6 +1133,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						webcamStream.current.getTracks().forEach((track) => track.stop());
 						webcamStream.current = null;
 					}
+					restorePreviewTrackResolution();
 				}
 			};
 		} catch (error) {
@@ -1084,8 +1151,15 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				webcamStream.current.getTracks().forEach((track) => track.stop());
 				webcamStream.current = null;
 			}
+			restorePreviewTrackResolution();
 		}
-	}, [getRecordingDurationMs, selectWebcamMimeType, webcamDeviceId, webcamEnabled]);
+	}, [
+		getRecordingDurationMs,
+		selectWebcamMimeType,
+		webcamDeviceId,
+		webcamEnabled,
+		webcamPreviewStreamRef,
+	]);
 
 	/** Start the prepared webcam MediaRecorder. Call after main recording begins. */
 	const beginWebcamCapture = useCallback(() => {
