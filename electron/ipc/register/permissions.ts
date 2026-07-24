@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import path from "node:path";
 import { app, ipcMain, shell, systemPreferences } from "electron";
 import { getMacPrivacySettingsUrl } from "../utils";
 
@@ -8,8 +10,23 @@ export function registerPermissionHandlers() {
     // until the app actually restarts - closing the window isn't enough on
     // macOS, since that doesn't quit the process. This gives the renderer a
     // real fix instead of a "refresh" that can never work mid-process.
-    app.relaunch()
-    app.exit(0)
+    //
+    // app.relaunch() alone isn't enough here: on macOS it re-execs the new
+    // process from the current one rather than handing off to launchd/Finder,
+    // and TCC's "is this app authorized" check can still resolve against the
+    // old (denied) process's context - verified directly: a process spawned
+    // via `open` always saw a fresh grant correctly, one spawned via
+    // app.relaunch() kept seeing the stale denial. Shelling out to `open` on
+    // the app bundle gives the new process the same independent launch
+    // lineage as double-clicking it in Finder/Dock actually has.
+    if (process.platform === "darwin") {
+      const appBundlePath = path.dirname(path.dirname(path.dirname(process.execPath)));
+      spawn("open", [appBundlePath], { detached: true, stdio: "ignore" }).unref();
+      app.exit(0);
+    } else {
+      app.relaunch();
+      app.exit(0);
+    }
     return { success: true }
   })
 
