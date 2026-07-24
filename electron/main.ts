@@ -183,6 +183,10 @@ function configureContentSecurityPolicy() {
 		`media-src 'self' data: blob: file: ${originList}`,
 		`font-src 'self' data: ${originList}`,
 		`connect-src 'self' ${originList} ws: wss:`,
+		// Without an explicit worker-src, Chromium falls back to script-src, which
+		// doesn't allow blob: - blocking the waveform/decode workers the editor
+		// creates from blob URLs.
+		`worker-src 'self' blob: ${originList}`,
 		"object-src 'none'",
 	].join("; ");
 
