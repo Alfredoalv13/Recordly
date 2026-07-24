@@ -4,7 +4,7 @@ import { app, ipcMain, shell, systemPreferences } from "electron";
 import { getMacPrivacySettingsUrl } from "../utils";
 
 export function registerPermissionHandlers() {
-  ipcMain.handle('relaunch-app', () => {
+  ipcMain.handle('relaunch-app', async () => {
     // macOS caches permission-check results (getMediaAccessStatus, etc.) for
     // the life of the process, so a grant made in System Settings is invisible
     // until the app actually restarts - closing the window isn't enough on
@@ -21,7 +21,12 @@ export function registerPermissionHandlers() {
     // lineage as double-clicking it in Finder/Dock actually has.
     if (process.platform === "darwin") {
       const appBundlePath = path.dirname(path.dirname(path.dirname(process.execPath)));
-      spawn("open", [appBundlePath], { detached: true, stdio: "ignore" }).unref();
+      spawn("/usr/bin/open", [appBundlePath], { detached: true, stdio: "ignore" }).unref();
+      // app.exit() tears the process down harder/faster than a normal quit -
+      // verified directly that calling it immediately after spawn() could
+      // kill this process before `open` finished handing off to launchd,
+      // silently dropping the relaunch entirely. Give it a moment first.
+      await new Promise((resolve) => setTimeout(resolve, 500));
       app.exit(0);
     } else {
       app.relaunch();
