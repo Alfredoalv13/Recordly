@@ -121,8 +121,16 @@ export function useWebcamPreviewOverlay({
 
 			const latestDeltaX = pointer.clientX - latestDragState.startX;
 			const latestDeltaY = pointer.clientY - latestDragState.startY;
-			const viewportWidth = Math.max(window.innerWidth, window.screen?.width ?? 0);
-			const viewportHeight = Math.max(window.innerHeight, window.screen?.height ?? 0);
+			// Clamp against this window's own renderable area, not the physical
+			// screen - the HUD overlay window only covers the full screen when
+			// mouse passthrough is supported. In the non-passthrough fallback
+			// (see getHudOverlayWindowBounds in electron/hudOverlayBounds.ts) it's
+			// a small band anchored to the bottom of the screen, so clamping
+			// against window.screen.width/height let the preview compute
+			// positions the window can't actually render into, clipping it at
+			// the window's real edge and making it look stuck.
+			const viewportWidth = window.innerWidth;
+			const viewportHeight = window.innerHeight;
 			const unclampedLeft = latestDragState.initialLeft + latestDeltaX;
 			const unclampedTop = latestDragState.initialTop + latestDeltaY;
 			const clampedLeft = Math.min(
