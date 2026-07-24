@@ -1,5 +1,4 @@
 import {
-	ArrowClockwiseIcon,
 	ArrowSquareOutIcon,
 	CameraIcon,
 	CaretDownIcon,
@@ -10,6 +9,7 @@ import {
 	MicrophoneIcon,
 	MonitorIcon,
 	PlusIcon,
+	PowerIcon,
 	RecordIcon,
 	SlidersHorizontalIcon,
 	SparkleIcon,
@@ -53,7 +53,6 @@ export function VybeStudioPreview() {
 	const [projectsLoading, setProjectsLoading] = useState(isDesktop);
 	const [pendingAction, setPendingAction] = useState<string | null>(null);
 	const [permissions, setPermissions] = useState<StudioPermissionState | null>(null);
-	const [permissionsLoading, setPermissionsLoading] = useState(isDesktop);
 
 	const refreshProjects = useCallback(async () => {
 		if (!window.electronAPI) return;
@@ -80,13 +79,10 @@ export function VybeStudioPreview() {
 	const refreshPermissions = useCallback(async () => {
 		if (!window.electronAPI) return;
 
-		setPermissionsLoading(true);
 		try {
 			setPermissions(await getStudioPermissionState(window.electronAPI));
 		} catch (error) {
 			console.error("Failed to load VybeClip permission status:", error);
-		} finally {
-			setPermissionsLoading(false);
 		}
 	}, []);
 
@@ -240,22 +236,19 @@ export function VybeStudioPreview() {
 									: "Accessibility permission is required for cursor tracking"}
 							</p>
 							<p className="truncate text-[10px] text-[#C6C6D0]/55">
-								Enable VybeClip in macOS Privacy & Security, then reopen the app.
+								Enable VybeClip in macOS Privacy & Security, then quit and reopen the app.
 							</p>
 						</div>
 					</div>
 					<div className="flex shrink-0 items-center gap-2">
 						<button
 							type="button"
-							onClick={() => void refreshPermissions()}
-							disabled={permissionsLoading}
-							className="grid h-7 w-7 place-items-center rounded-md border border-white/[0.08] text-[#C6C6D0] transition hover:bg-white/[0.05] disabled:opacity-45"
-							aria-label="Refresh permission status"
+							onClick={() => void window.electronAPI?.relaunchApp?.()}
+							className="flex h-7 items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 text-[10px] font-semibold text-[#C6C6D0] transition hover:bg-white/[0.05]"
+							title="macOS only picks up a new permission grant after the app fully restarts - closing the window isn't enough."
 						>
-							<ArrowClockwiseIcon
-								size={13}
-								className={permissionsLoading ? "animate-spin" : ""}
-							/>
+							<PowerIcon size={13} />
+							Quit &amp; Reopen
 						</button>
 						<button
 							type="button"

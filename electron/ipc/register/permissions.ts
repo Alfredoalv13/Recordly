@@ -1,7 +1,18 @@
-import { ipcMain, shell, systemPreferences } from "electron";
+import { app, ipcMain, shell, systemPreferences } from "electron";
 import { getMacPrivacySettingsUrl } from "../utils";
 
 export function registerPermissionHandlers() {
+  ipcMain.handle('relaunch-app', () => {
+    // macOS caches permission-check results (getMediaAccessStatus, etc.) for
+    // the life of the process, so a grant made in System Settings is invisible
+    // until the app actually restarts - closing the window isn't enough on
+    // macOS, since that doesn't quit the process. This gives the renderer a
+    // real fix instead of a "refresh" that can never work mid-process.
+    app.relaunch()
+    app.exit(0)
+    return { success: true }
+  })
+
   ipcMain.handle('open-external-url', async (_, url: string) => {
     try {
       // Security: only allow http/https URLs to prevent file:// or custom protocol abuse
