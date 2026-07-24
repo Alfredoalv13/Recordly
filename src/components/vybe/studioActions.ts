@@ -10,6 +10,7 @@ type StudioElectronApi = Pick<
 	| "openScreenRecordingPreferences"
 	| "openSourceSelector"
 	| "openVideoFilePicker"
+	| "requestAccessibilityPermission"
 	| "setCurrentVideoPath"
 	| "showRecordingControls"
 	| "switchToEditor"
@@ -64,6 +65,16 @@ export async function startStudioRecording(api: StudioElectronApi) {
 		await api.openScreenRecordingPreferences();
 		throw new Error("Enable Screen Recording in System Settings, then reopen VybeClip");
 	}
+	if (!permissions.accessibilityGranted) {
+		// Same issue as Screen Recording above: getAccessibilityPermissionStatus()
+		// uses isTrustedAccessibilityClient(false), a passive read that never
+		// prompts or registers the app in System Settings. The `true` variant
+		// both triggers the real native prompt and adds/updates the app's own
+		// entry there - without it, a first-time user has nothing to grant.
+		await api.requestAccessibilityPermission().catch(() => null);
+		permissions = await getStudioPermissionState(api);
+	}
+
 	if (!permissions.accessibilityGranted) {
 		await api.openAccessibilityPreferences();
 		throw new Error("Enable Accessibility in System Settings, then reopen VybeClip");

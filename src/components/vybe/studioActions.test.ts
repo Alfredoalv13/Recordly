@@ -19,6 +19,9 @@ function createApi() {
 			.fn()
 			.mockResolvedValue({ success: true, trusted: true, prompted: false }),
 		openScreenRecordingPreferences: vi.fn().mockResolvedValue({ success: true }),
+		requestAccessibilityPermission: vi
+			.fn()
+			.mockResolvedValue({ success: true, trusted: true, prompted: true }),
 		openAccessibilityPreferences: vi.fn().mockResolvedValue({ success: true }),
 		openVideoFilePicker: vi.fn().mockResolvedValue({ success: true, path: "/tmp/capture.mp4" }),
 		setCurrentVideoPath: vi.fn().mockResolvedValue({ success: true }),
@@ -79,10 +82,38 @@ describe("VybeClip Studio actions", () => {
 			trusted: false,
 			prompted: false,
 		});
+		api.requestAccessibilityPermission.mockResolvedValue({
+			success: true,
+			trusted: false,
+			prompted: true,
+		});
 
 		await expect(startStudioRecording(api)).rejects.toThrow("Enable Accessibility");
+		expect(api.requestAccessibilityPermission).toHaveBeenCalledOnce();
 		expect(api.openAccessibilityPreferences).toHaveBeenCalledOnce();
 		expect(api.showRecordingControls).not.toHaveBeenCalled();
+	});
+
+	it("triggers the real macOS Accessibility prompt via requestAccessibilityPermission before giving up", async () => {
+		const api = createApi();
+		api.getAccessibilityPermissionStatus.mockResolvedValueOnce({
+			success: true,
+			trusted: false,
+			prompted: false,
+		});
+		// requestAccessibilityPermission() itself grants trust once the user allows it.
+		api.requestAccessibilityPermission.mockResolvedValue({
+			success: true,
+			trusted: true,
+			prompted: true,
+		});
+
+		await startStudioRecording(api);
+
+		expect(api.requestAccessibilityPermission).toHaveBeenCalledOnce();
+		expect(api.openAccessibilityPreferences).not.toHaveBeenCalled();
+		expect(api.showRecordingControls).toHaveBeenCalledOnce();
+		expect(api.openSourceSelector).toHaveBeenCalledOnce();
 	});
 
 	it("does not require macOS permissions on other platforms", async () => {
