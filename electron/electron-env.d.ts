@@ -617,6 +617,7 @@ interface Window {
 			prompted: boolean;
 			error?: string;
 		}>;
+		relaunchApp: () => Promise<{ success: boolean }>;
 		getScreenRecordingPermissionStatus: () => Promise<{
 			success: boolean;
 			status: string;
