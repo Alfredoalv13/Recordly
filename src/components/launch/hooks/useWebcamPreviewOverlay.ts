@@ -10,12 +10,23 @@ export function useWebcamPreviewOverlay({
 	showWebcamControls,
 	webcamPopoverOpen,
 	hudOverlayMousePassthroughSupported,
+	activeRecordingWebcamStream,
 }: {
 	webcamEnabled: boolean;
 	webcamDeviceId?: string;
 	showWebcamControls: boolean;
 	webcamPopoverOpen: boolean;
 	hudOverlayMousePassthroughSupported: boolean | null;
+	/**
+	 * The MediaStream useScreenRecorder already has open for the actual
+	 * recording, once one is active. When set, the preview attaches to this
+	 * stream directly instead of opening its own independent getUserMedia()
+	 * session for the same camera - two concurrent capture sessions on one
+	 * physical camera is what was causing the recorded webcam file to
+	 * truncate to a fraction of a second shortly after starting. Ownership
+	 * (and stopping the tracks) stays with whoever passed this in.
+	 */
+	activeRecordingWebcamStream?: MediaStream | null;
 }) {
 	const [showFloatingWebcamPreview, setShowFloatingWebcamPreview] = useState(true);
 	const [webcamPreviewOffset, setWebcamPreviewOffset] = useState(DEFAULT_WEBCAM_PREVIEW_OFFSET);
@@ -220,6 +231,34 @@ export function useWebcamPreviewOverlay({
 	useEffect(() => {
 		let mounted = true;
 
+		// While an actual recording is in progress, useScreenRecorder already
+		// holds its own camera stream. Reuse it directly instead of opening a
+		// second, independent getUserMedia() session for the same device -
+		// concurrent capture sessions on one physical camera is what was
+		// truncating the recorded webcam file to a fraction of a second.
+		if (activeRecordingWebcamStream) {
+			previewStreamRef.current = activeRecordingWebcamStream;
+			attachPreviewStreamToNode(webcamPreviewRef.current);
+			attachPreviewStreamToNode(recordingWebcamPreviewRef.current);
+
+			return () => {
+				mounted = false;
+				const previewNode = webcamPreviewRef.current;
+				const recordingPreviewNode = recordingWebcamPreviewRef.current;
+
+				[previewNode, recordingPreviewNode]
+					.filter((node): node is HTMLVideoElement => Boolean(node))
+					.forEach((videoElement) => {
+						videoElement.pause();
+						videoElement.srcObject = null;
+					});
+				// Not ours to stop - useScreenRecorder owns this stream's lifecycle.
+				if (previewStreamRef.current === activeRecordingWebcamStream) {
+					previewStreamRef.current = null;
+				}
+			};
+		}
+
 		const startPreview = async () => {
 			if (!shouldStreamWebcamPreview) {
 				return;
@@ -274,7 +313,12 @@ export function useWebcamPreviewOverlay({
 				previewStreamRef.current = null;
 			}
 		};
-	}, [attachPreviewStreamToNode, shouldStreamWebcamPreview, webcamDeviceId]);
+	}, [
+		attachPreviewStreamToNode,
+		shouldStreamWebcamPreview,
+		webcamDeviceId,
+		activeRecordingWebcamStream,
+	]);
 
 	return {
 		showFloatingWebcamPreview,

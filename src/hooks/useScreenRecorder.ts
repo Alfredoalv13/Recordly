@@ -149,6 +149,7 @@ type UseScreenRecorderReturn = {
 	setWebcamEnabled: (enabled: boolean) => void;
 	webcamDeviceId: string | undefined;
 	setWebcamDeviceId: (deviceId: string | undefined) => void;
+	activeWebcamStream: MediaStream | null;
 	countdownDelay: number;
 	setCountdownDelay: (delay: number) => void;
 };
@@ -340,6 +341,17 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const screenStream = useRef<MediaStream | null>(null);
 	const microphoneStream = useRef<MediaStream | null>(null);
 	const webcamStream = useRef<MediaStream | null>(null);
+	// Reactive mirror of webcamStream.current, exposed so other components
+	// (the floating live-preview bubble) can reuse this exact stream instead
+	// of opening their own independent getUserMedia() session for the same
+	// camera - two concurrent sessions on one physical camera is the actual
+	// cause of the webcam recording truncating to a fraction of a second
+	// shortly after starting.
+	const [activeWebcamStream, setActiveWebcamStreamState] = useState<MediaStream | null>(null);
+	const setWebcamStream = useCallback((next: MediaStream | null) => {
+		webcamStream.current = next;
+		setActiveWebcamStreamState(next);
+	}, []);
 	const mixingContext = useRef<AudioContext | null>(null);
 	const chunks = useRef<Blob[]>([]);
 	const webcamChunks = useRef<Blob[]>([]);
@@ -574,7 +586,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 		if (webcamStream.current) {
 			webcamStream.current.getTracks().forEach((track) => track.stop());
-			webcamStream.current = null;
+			setWebcamStream(null);
 		}
 
 		if (mixingContext.current) {
@@ -961,7 +973,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		}
 
 		try {
-			webcamStream.current = await navigator.mediaDevices.getUserMedia({
+			const acquiredStream = await navigator.mediaDevices.getUserMedia({
 				video: webcamDeviceId
 					? {
 							deviceId: { exact: webcamDeviceId },
@@ -976,6 +988,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						},
 				audio: false,
 			});
+			setWebcamStream(acquiredStream);
 
 			const mimeType = selectWebcamMimeType();
 			webcamChunks.current = [];
@@ -985,13 +998,13 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			});
 			pendingWebcamPathPromise.current = webcamStopPromise.current;
 
-			const recorder = new MediaRecorder(webcamStream.current, {
+			const recorder = new MediaRecorder(acquiredStream, {
 				videoBitsPerSecond: WEBCAM_BITRATE,
 				...(mimeType ? { mimeType } : {}),
 			});
 
 			webcamUnexpectedStopNotified.current = false;
-			for (const track of webcamStream.current.getVideoTracks()) {
+			for (const track of acquiredStream.getVideoTracks()) {
 				// Fires only for a track ending on its own (device unplugged, OS
 				// revoked access, another app took the camera, etc.) - not for our
 				// own track.stop() calls below, which the spec exempts from this
@@ -1065,7 +1078,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					webcamStartTime.current = null;
 					if (webcamStream.current) {
 						webcamStream.current.getTracks().forEach((track) => track.stop());
-						webcamStream.current = null;
+						setWebcamStream(null);
 					}
 				}
 			};
@@ -1082,7 +1095,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			webcamTimeOffsetMs.current = 0;
 			if (webcamStream.current) {
 				webcamStream.current.getTracks().forEach((track) => track.stop());
-				webcamStream.current = null;
+				setWebcamStream(null);
 			}
 		}
 	}, [getRecordingDurationMs, selectWebcamMimeType, webcamDeviceId, webcamEnabled]);
@@ -2081,7 +2094,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		webcamStartTime.current = null;
 		webcamTimeOffsetMs.current = 0;
 		webcamStream.current?.getTracks().forEach((t) => t.stop());
-		webcamStream.current = null;
+		setWebcamStream(null);
 		pendingWebcamPathPromise.current = null;
 		resolvedWebcamPath.current = null;
 
@@ -2161,6 +2174,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setWebcamEnabled,
 		webcamDeviceId,
 		setWebcamDeviceId,
+		activeWebcamStream,
 		countdownDelay,
 		setCountdownDelay,
 	};
