@@ -220,7 +220,7 @@ async function createCursorStyleAsset(style: SingleCursorStyle): Promise<LoadedC
 		sourceCtx.drawImage(image, 0, 0);
 		const trimmed = trimCanvasToAlpha(sourceCanvas, { x: 40, y: 22 });
 		const trimmedImage = await loadImage(trimmed.dataUrl);
-		const texture = configureCursorTexture(Texture.from(trimmed.dataUrl));
+		const texture = configureCursorTexture(Texture.from(trimmedImage));
 
 		return {
 			texture,
@@ -248,7 +248,7 @@ async function createCursorStyleAsset(style: SingleCursorStyle): Promise<LoadedC
 
 	const dataUrl = canvas.toDataURL("image/png");
 	const image = await loadImage(dataUrl);
-	const texture = configureCursorTexture(Texture.from(dataUrl));
+	const texture = configureCursorTexture(Texture.from(image));
 
 	return {
 		texture,
@@ -265,7 +265,7 @@ async function createCursorPackAsset(
 ): Promise<LoadedCursorAsset> {
 	const renderableUrl = await getRenderableAssetUrl(url);
 	const image = await loadImage(renderableUrl);
-	const texture = configureCursorTexture(Texture.from(renderableUrl));
+	const texture = configureCursorTexture(Texture.from(image));
 
 	return {
 		texture,
@@ -286,7 +286,7 @@ async function createRasterizedCursorAsset(
 	sourceCanvas.height = image.naturalHeight;
 	const sourceCtx = sourceCanvas.getContext("2d");
 	if (!sourceCtx) {
-		const texture = configureCursorTexture(Texture.from(url));
+		const texture = configureCursorTexture(Texture.from(image));
 		return {
 			texture,
 			image,
@@ -304,7 +304,7 @@ async function createRasterizedCursorAsset(
 		y: sourceCanvas.height * clamp(anchor.y, 0, 1),
 	});
 	const trimmedImage = await loadImage(trimmed.dataUrl);
-	const texture = configureCursorTexture(Texture.from(trimmed.dataUrl));
+	const texture = configureCursorTexture(Texture.from(trimmedImage));
 
 	return {
 		texture,
@@ -435,7 +435,7 @@ async function createInvertedCursorAsset(asset: LoadedCursorAsset): Promise<Load
 
 	const dataUrl = canvas.toDataURL("image/png");
 	const image = await loadImage(dataUrl);
-	const texture = configureCursorTexture(Texture.from(dataUrl));
+	const texture = configureCursorTexture(Texture.from(image));
 
 	return {
 		texture,
