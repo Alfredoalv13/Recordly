@@ -88,6 +88,7 @@ export interface EditorPreferences extends PersistedEditorControls {
 	customAspectHeight: string;
 	customWallpapers: string[];
 	autoApplyFreshRecordingAutoZooms: boolean;
+	autoCaptionLanguage: string;
 	whisperExecutablePath: string | null;
 	whisperModelPath: string | null;
 }
@@ -153,6 +154,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
 	customAspectHeight: "9",
 	customWallpapers: [],
 	autoApplyFreshRecordingAutoZooms: true,
+	autoCaptionLanguage: "auto",
 	whisperExecutablePath: null,
 	whisperModelPath: null,
 };
@@ -184,6 +186,15 @@ function normalizeCustomWallpapers(value: unknown, fallback: string[]): string[]
 			value.filter((item): item is string => typeof item === "string" && item.length > 0),
 		),
 	);
+}
+
+function normalizeCaptionLanguage(value: unknown, fallback: string): string {
+	if (typeof value !== "string") {
+		return fallback;
+	}
+
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : fallback;
 }
 
 function normalizeNullablePath(value: unknown): string | null {
@@ -440,6 +451,10 @@ export function normalizeEditorPreferences(
 		autoApplyFreshRecordingAutoZooms: normalizeBoolean(
 			raw.autoApplyFreshRecordingAutoZooms,
 			fallback.autoApplyFreshRecordingAutoZooms,
+		),
+		autoCaptionLanguage: normalizeCaptionLanguage(
+			raw.autoCaptionLanguage,
+			fallback.autoCaptionLanguage,
 		),
 		whisperExecutablePath:
 			normalizeNullablePath(raw.whisperExecutablePath) ?? fallback.whisperExecutablePath,
