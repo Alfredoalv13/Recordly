@@ -105,7 +105,7 @@ function LaunchWindowContent() {
 		devices: videoDevices,
 		selectedDeviceId: selectedVideoDeviceId,
 		setSelectedDeviceId: setSelectedVideoDeviceId,
-	} = useVideoDevices(webcamEnabled || openId === "webcam");
+	} = useVideoDevices(webcamEnabled || openId === "webcam", !recording);
 
 	const {
 		hudOverlayMousePassthroughSupported,
