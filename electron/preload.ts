@@ -488,6 +488,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	showRecordingControls: () => {
 		return ipcRenderer.invoke("show-recording-controls");
 	},
+	setHudOverlayWebcamPreviewActive: (active: boolean) => {
+		return ipcRenderer.invoke("set-hud-overlay-webcam-preview-active", active);
+	},
 	selectSource: (source: ProcessedDesktopSource) => {
 		return ipcRenderer.invoke("select-source", source);
 	},

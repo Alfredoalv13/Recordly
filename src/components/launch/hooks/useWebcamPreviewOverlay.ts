@@ -60,6 +60,19 @@ export function useWebcamPreviewOverlay({
 		webcamEnabled && (showRecordingWebcamPreview || (showWebcamControls && webcamPopoverOpen));
 
 	useEffect(() => {
+		// The HUD overlay window shrinks to a compact, non-click-through band
+		// during active recording so the stop/pause controls stay reliably
+		// clickable (see windows.ts). That band is only tall enough for the HUD
+		// bar itself, leaving the draggable webcam bubble stuck at the bottom
+		// edge with no vertical room. Tell the main process when a preview is
+		// actually showing so it can widen the window to fit it.
+		void window.electronAPI?.setHudOverlayWebcamPreviewActive?.(showRecordingWebcamPreview);
+		return () => {
+			void window.electronAPI?.setHudOverlayWebcamPreviewActive?.(false);
+		};
+	}, [showRecordingWebcamPreview]);
+
+	useEffect(() => {
 		if (!webcamEnabled) {
 			webcamPreviewOffsetRef.current = DEFAULT_WEBCAM_PREVIEW_OFFSET;
 			setWebcamPreviewOffset(DEFAULT_WEBCAM_PREVIEW_OFFSET);

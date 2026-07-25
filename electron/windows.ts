@@ -29,6 +29,17 @@ let hudOverlayIgnoringMouse = true;
 let hudOverlaySourceSelectionActive = false;
 let hudOverlayMouseReassertTimer: NodeJS.Timeout | null = null;
 let hudOverlayRecordingActive = false;
+// The HUD window normally shrinks to a compact, non-click-through band during
+// active recording (see isHudOverlayCanvasActive) so the stop/pause controls
+// stay reliably clickable without depending on hover-based passthrough
+// toggling. That compact band is only tall enough for the HUD bar itself,
+// which leaves nowhere for the draggable webcam preview bubble to go - it
+// gets visually clipped at the window's real edge and can't move vertically
+// at all. While a webcam preview is showing, use the full work area instead;
+// the existing hover-driven mouse-passthrough toggling (already wired to the
+// bubble's own pointer events) keeps clicks passing through everywhere except
+// the HUD bar/bubble themselves, independent of window size.
+let hudOverlayWebcamPreviewActive = false;
 let countdownWindow: BrowserWindow | null = null;
 let updateToastWindow: BrowserWindow | null = null;
 
@@ -198,11 +209,22 @@ function isHudOverlayCanvasActive(): boolean {
 
 function getHudOverlayBounds() {
 	const { workArea } = getHudOverlayDisplay();
-	return getHudOverlayWindowBounds(
-		workArea,
-		isHudOverlayCanvasActive(),
-		hudOverlayFallbackExpanded,
-	);
+	// Deliberately not just isHudOverlayCanvasActive(): that flag also gates
+	// the monitor-boundary-crossing drag relocation logic below, which should
+	// stay tied to the platform/passthrough check alone. Sizing the window
+	// itself additionally needs to widen for an active webcam preview so the
+	// draggable bubble has somewhere to go, even mid-recording.
+	const needsFullCanvas = isHudOverlayCanvasActive() || hudOverlayWebcamPreviewActive;
+	return getHudOverlayWindowBounds(workArea, needsFullCanvas, hudOverlayFallbackExpanded);
+}
+
+export function setHudOverlayWebcamPreviewActive(active: boolean): void {
+	const next = Boolean(active);
+	if (next === hudOverlayWebcamPreviewActive) {
+		return;
+	}
+	hudOverlayWebcamPreviewActive = next;
+	applyHudOverlayBounds();
 }
 
 function applyHudOverlayBounds() {
