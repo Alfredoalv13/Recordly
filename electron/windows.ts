@@ -29,16 +29,16 @@ let hudOverlayIgnoringMouse = true;
 let hudOverlaySourceSelectionActive = false;
 let hudOverlayMouseReassertTimer: NodeJS.Timeout | null = null;
 let hudOverlayRecordingActive = false;
-// The HUD window normally shrinks to a compact, non-click-through band during
-// active recording (see isHudOverlayCanvasActive) so the stop/pause controls
-// stay reliably clickable without depending on hover-based passthrough
-// toggling. That compact band is only tall enough for the HUD bar itself,
-// which leaves nowhere for the draggable webcam preview bubble to go - it
-// gets visually clipped at the window's real edge and can't move vertically
-// at all. While a webcam preview is showing, use the full work area instead;
-// the existing hover-driven mouse-passthrough toggling (already wired to the
-// bubble's own pointer events) keeps clicks passing through everywhere except
-// the HUD bar/bubble themselves, independent of window size.
+// On platforms with OS-level mouse-passthrough support (macOS, Windows 11+),
+// the HUD window goes full-canvas for the entire duration of a recording
+// (see isHudOverlayFullCanvasWhileRecording), so this flag has no effect
+// there - the bar and the webcam preview bubble both already have the whole
+// screen to be dragged around in. It only matters on platforms without
+// passthrough support (Linux, pre-Windows-11), where the window is confined
+// to a small non-click-through band during recording: there, this widens
+// that band to the taller "expanded" fallback size (see getHudOverlayBounds)
+// so the draggable webcam preview bubble has some vertical room, instead of
+// being clipped at the compact band's edge.
 let hudOverlayWebcamPreviewActive = false;
 let countdownWindow: BrowserWindow | null = null;
 let updateToastWindow: BrowserWindow | null = null;
@@ -200,22 +200,43 @@ function getHudOverlayDisplay() {
 
 // True while the HUD window is the full-display, click-through canvas that
 // hosts the draggable widget (mouse passthrough supported and not actively
-// recording). Only in this mode does the window span an entire display, so
-// only in this mode can it usefully be relocated to follow a drag across a
-// monitor boundary - see hud-overlay-relocate-to-point below.
+// recording).
 function isHudOverlayCanvasActive(): boolean {
 	return isHudOverlayMousePassthroughSupported() && !hudOverlayRecordingActive;
 }
 
+// True while the window spans the full display DURING an active recording,
+// so the whole HUD bar (and the webcam preview bubble, when showing) can be
+// dragged anywhere on screen instead of being boxed into a small
+// bottom-anchored band. Requires OS-level passthrough support: without it
+// there is no way to click through a full-display window, so it would
+// otherwise swallow every click on the whole screen for the entire recording
+// (see setHudOverlayMousePassthrough, which falls back to the small
+// always-interactive band when this is false).
+function isHudOverlayFullCanvasWhileRecording(): boolean {
+	return hudOverlayRecordingActive && isHudOverlayMousePassthroughSupported();
+}
+
+// True whenever the window currently spans the full display, whether that's
+// the idle/pre-recording canvas or the full-canvas-while-recording case.
+// Both drag-relocation-across-monitors and the bounds calculation below need
+// this same union. Distinct from isHudOverlayCanvasActive() alone because
+// that flag is also used on its own where it should stay tied strictly to
+// the non-recording canvas case.
+function isHudOverlayFullCanvasActive(): boolean {
+	return isHudOverlayCanvasActive() || isHudOverlayFullCanvasWhileRecording();
+}
+
 function getHudOverlayBounds() {
 	const { workArea } = getHudOverlayDisplay();
-	// Deliberately not just isHudOverlayCanvasActive(): that flag also gates
-	// the monitor-boundary-crossing drag relocation logic below, which should
-	// stay tied to the platform/passthrough check alone. Sizing the window
-	// itself additionally needs to widen for an active webcam preview so the
-	// draggable bubble has somewhere to go, even mid-recording.
-	const needsFullCanvas = isHudOverlayCanvasActive() || hudOverlayWebcamPreviewActive;
-	return getHudOverlayWindowBounds(workArea, needsFullCanvas, hudOverlayFallbackExpanded);
+	const needsFullCanvas = isHudOverlayFullCanvasActive();
+	// Platforms without OS-level passthrough support (Linux, pre-Windows-11)
+	// can never go full-canvas during a recording, but still widen the
+	// compact band to the taller fallback size when a webcam preview needs
+	// room to be dragged vertically.
+	const fallbackExpanded =
+		hudOverlayFallbackExpanded || (hudOverlayRecordingActive && hudOverlayWebcamPreviewActive);
+	return getHudOverlayWindowBounds(workArea, needsFullCanvas, fallbackExpanded);
 }
 
 export function setHudOverlayWebcamPreviewActive(active: boolean): void {
@@ -224,6 +245,10 @@ export function setHudOverlayWebcamPreviewActive(active: boolean): void {
 		return;
 	}
 	hudOverlayWebcamPreviewActive = next;
+	// Only affects sizing (see getHudOverlayBounds) - whether the window is
+	// full-canvas is now driven by isHudOverlayFullCanvasWhileRecording alone,
+	// which doesn't depend on this flag, so there's no passthrough-mode
+	// transition to handle here beyond a bounds recompute.
 	applyHudOverlayBounds();
 }
 
@@ -307,10 +332,12 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 }
 
 function setHudOverlayMousePassthrough(ignore: boolean) {
+	const fullCanvasWhileRecording = isHudOverlayFullCanvasWhileRecording();
+
 	hudOverlayIgnoringMouse =
 		hudOverlaySourceSelectionActive && !hudOverlayRecordingActive
 			? true
-			: hudOverlayRecordingActive
+			: hudOverlayRecordingActive && !fullCanvasWhileRecording
 				? false
 				: ignore;
 
@@ -323,11 +350,21 @@ function setHudOverlayMousePassthrough(ignore: boolean) {
 		return;
 	}
 
-	if (hudOverlayRecordingActive) {
+	if (hudOverlayRecordingActive && !fullCanvasWhileRecording) {
 		hudOverlayFallbackExpanded = false;
 		applyHudOverlayBounds();
 		hudOverlayWindow.setIgnoreMouseEvents(false);
 		return;
+	}
+
+	if (fullCanvasWhileRecording) {
+		// Still recording, but the window now spans the full display so the
+		// webcam preview bubble has room to roam - behave like the idle
+		// canvas window below (click-through with hover forwarding) instead
+		// of capturing the whole screen's clicks for the recording's
+		// duration.
+		hudOverlayFallbackExpanded = false;
+		applyHudOverlayBounds();
 	}
 
 	if (!isHudOverlayMousePassthroughSupported()) {
@@ -418,8 +455,8 @@ ipcMain.on("hud-overlay-drag", (_event, phase: string, screenX: number, screenY:
 	}
 });
 
-// The HUD canvas window (see isHudOverlayCanvasActive above) is sized to a
-// single display's work area, so the CSS-driven drag in useHudBarDrag.ts -
+// The HUD canvas window (see isHudOverlayFullCanvasActive above) is sized to
+// a single display's work area, so the CSS-driven drag in useHudBarDrag.ts -
 // which clamps the widget's translate3d offset to window.innerWidth/Height -
 // can never move the widget past that display's edge. When a drag pushes
 // against that edge, the renderer calls this to relocate the real window to
@@ -427,7 +464,7 @@ ipcMain.on("hud-overlay-drag", (_event, phase: string, screenX: number, screenY:
 // widget's rendered position from scratch on the next frame, so it picks up
 // wherever the window ends up without needing to know how far it moved.
 ipcMain.handle("hud-overlay-relocate-to-point", (_event, screenX: number, screenY: number) => {
-	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed() || !isHudOverlayCanvasActive()) {
+	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed() || !isHudOverlayFullCanvasActive()) {
 		return { moved: false };
 	}
 
@@ -548,7 +585,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 	}
 
 	if (isHudOverlayMousePassthroughSupported()) {
-		if (hudOverlayRecordingActive) {
+		if (hudOverlayRecordingActive && !isHudOverlayFullCanvasWhileRecording()) {
 			hudOverlayIgnoringMouse = false;
 			win.setIgnoreMouseEvents(false);
 		} else {
@@ -706,7 +743,13 @@ export function setHudOverlayRecordingActive(recording: boolean): void {
 	hudOverlayRecordingActive = Boolean(recording);
 	hudOverlayFallbackExpanded = false;
 	applyHudOverlayBounds();
-	setHudOverlayMousePassthrough(!hudOverlayRecordingActive);
+	// Always pass true: on platforms without passthrough support, the
+	// compact-recording branch inside setHudOverlayMousePassthrough forces
+	// non-passthrough regardless of this argument, so it's a no-op there.
+	// On passthrough-supported platforms this is the full-canvas-while-
+	// recording case, where true is the correct default - click-through with
+	// hover forwarding, same as the idle canvas window.
+	setHudOverlayMousePassthrough(true);
 }
 
 export function createUpdateToastWindow(): BrowserWindow {

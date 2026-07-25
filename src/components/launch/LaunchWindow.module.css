@@ -32,6 +32,18 @@
 	padding-right: 2px;
 }
 
+/* Applied together with .bar/.barStateViewport only while recording, so the
+   idle (pre-recording) controls keep their original size. */
+.barRecording {
+	gap: 6px;
+	padding: 7px 14px 7px 12px;
+	border-radius: 16px;
+}
+
+.barStateViewportRecording {
+	min-height: 34px;
+}
+
 .barState {
 	display: flex;
 	align-items: center;

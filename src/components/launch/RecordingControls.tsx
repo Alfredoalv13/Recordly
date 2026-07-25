@@ -33,14 +33,14 @@ export const RecordingControls = ({
 	const memoizedControls = useMemo(() => {
 		return (
 			<>
-				<div className="flex items-center gap-[5px]">
+				<div className="flex items-center gap-1">
 					<div
-						className={`w-[7px] h-[7px] rounded-full ${
+						className={`w-[6px] h-[6px] rounded-full ${
 							paused ? "bg-[#D59D80]" : `bg-[#B6410F] ${styles.recDotBlink}`
 						}`}
 					/>
 					<span
-						className={`text-[10px] font-bold tracking-[0.06em] ${
+						className={`text-[9px] font-bold tracking-[0.06em] ${
 							paused ? "text-[#D59D80]" : "text-[#B6410F]"
 						}`}
 					>
@@ -49,83 +49,85 @@ export const RecordingControls = ({
 				</div>
 
 				<span
-					className={`font-mono text-xs font-semibold min-w-[52px] text-center tracking-[0.02em] ${
+					className={`font-mono text-[11px] font-semibold min-w-[42px] text-center tracking-[0.02em] ${
 						paused ? "text-[#D59D80]" : "text-[var(--launch-text)]"
 					}`}
 				>
 					{formatTime(elapsed)}
 				</span>
 
-				<Separator orientation="vertical" className="mx-[5px] h-6" />
+				<Separator orientation="vertical" className="mx-1 h-5" />
 
 				<span title={t("recording.micToggleDisabledTip")}>
 					<Button
 						variant="ghost"
 						size="icon"
-						iconSize="lg"
-						className={microphoneEnabled ? styles.ibActive : ""}
+						iconSize="sm"
+						className={`h-7 w-7 ${microphoneEnabled ? styles.ibActive : ""}`}
 						aria-label={t("recording.micToggleDisabledTip")}
 						disabled
 						onClick={onToggleMicrophone}
 					>
 						{microphoneEnabled ? (
-							<MicrophoneIcon size={18} />
+							<MicrophoneIcon size={15} />
 						) : (
-							<MicrophoneSlashIcon size={18} />
+							<MicrophoneSlashIcon size={15} />
 						)}
 					</Button>
 				</span>
 
-				<Separator orientation="vertical" className="mx-[5px] h-6" />
+				<Separator orientation="vertical" className="mx-1 h-5" />
 
 				<Button
 					variant={paused ? "default" : "ghost"}
 					size="icon"
-					iconSize="lg"
+					iconSize="sm"
 					onClick={onPauseResume}
 					title={paused ? t("recording.resume") : t("recording.pause")}
 					aria-label={paused ? t("recording.resume") : t("recording.pause")}
-					className={paused ? styles.ibGreen : ""}
+					className={`h-7 w-7 ${paused ? styles.ibGreen : ""}`}
 				>
 					{paused ? (
-						<PlayIcon size={18} fill="currentColor" strokeWidth={0} />
+						<PlayIcon size={15} fill="currentColor" strokeWidth={0} />
 					) : (
-						<PauseIcon size={18} />
+						<PauseIcon size={15} />
 					)}
 				</Button>
 
 				<Button
 					variant="ghost"
 					size="icon"
-					iconSize="lg"
+					iconSize="sm"
 					onClick={onStopRecording}
 					title={t("recording.stop")}
 					aria-label={t("recording.stop")}
-					className={styles.ibRed}
+					className={`h-7 w-7 ${styles.ibRed}`}
 				>
-					<SquareIcon size={16} fill="currentColor" strokeWidth={0} />
+					<SquareIcon size={13} fill="currentColor" strokeWidth={0} />
 				</Button>
 
 				<Button
 					variant="ghost"
 					size="icon"
-					iconSize="lg"
+					iconSize="sm"
 					onClick={onHideHud}
 					title={t("recording.hideHud")}
 					aria-label={t("recording.hideHud")}
+					className="h-7 w-7"
 				>
-					<MinusIcon size={16} />
+					<MinusIcon size={13} />
 				</Button>
 
 				<Button
 					variant="ghost"
 					size="icon"
-					iconSize="lg"
+					iconSize="sm"
 					onClick={onCancelRecording}
 					title={t("recording.cancel")}
 					aria-label={t("recording.cancel")}
+					className="h-7 w-7"
 				>
-					<XIcon size={18} />
+					<XIcon size={15} />
 				</Button>
 			</>
 		);

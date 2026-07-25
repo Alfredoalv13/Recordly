@@ -458,7 +458,7 @@ function LaunchWindowContent() {
 								ref={hudBarRef}
 								layout={!showRecordingWebcamPreview && !isHudDragging}
 								transition={hudStateTransition}
-								className={`${styles.bar} launch-theme mb-2`}
+								className={`${styles.bar} ${recording ? styles.barRecording : ""} launch-theme mb-2`}
 							>
 								<div
 									// Linux compositors and non-passthrough Windows fallback windows
@@ -472,10 +472,12 @@ function LaunchWindowContent() {
 									onPointerUp={handleHudBarPointerUp}
 									onPointerCancel={handleHudBarPointerUp}
 								>
-									<RxDragHandleDots2 size={14} className="text-[#6b6b78]" />
+									<RxDragHandleDots2 size={recording ? 12 : 14} className="text-[#6b6b78]" />
 								</div>
 
-								<div className={styles.barStateViewport}>
+								<div
+									className={`${styles.barStateViewport} ${recording ? styles.barStateViewportRecording : ""}`}
+								>
 									<AnimatePresence initial={false} mode="wait">
 										<motion.div
 											key={hudMode}
