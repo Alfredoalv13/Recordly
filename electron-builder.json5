@@ -21,6 +21,13 @@
     "dist",
     "dist-electron",
     "electron/native",
+    // uiohook-napi's compiled dist/index.js does `require('node-gyp-build')`
+    // to load its native addon. electron-builder's dependency pruning drops
+    // this transitive dependency even though it's correctly declared in
+    // uiohook-napi's package.json (confirmed via `npm ls node-gyp-build`),
+    // silently breaking global click capture (used for auto-zoom) in the
+    // packaged app while leaving everything else working. Force it in.
+    "node_modules/node-gyp-build/**/*",
     "!node_modules/ffprobe-static/bin/darwin/**",
     "!node_modules/ffprobe-static/bin/linux/**",
     "!node_modules/ffprobe-static/bin/win32/ia32/**",
