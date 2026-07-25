@@ -7,14 +7,22 @@ const RECORDING_MIME_TYPE_PREFERENCES = [
 ] as const;
 
 const WEBCAM_RECORDING_MIME_TYPE_PREFERENCES = [
+	// VP9/VP8 first: the screen recording's native ScreenCaptureKit helper already
+	// holds a hardware H.264 encoder session, and macOS's VideoToolbox only
+	// supports a small number of concurrent hardware encode sessions. Preferring
+	// an MP4/H.264 MediaRecorder here for the webcam meant it competed for that
+	// same hardware encoder - observed directly as ondataavailable never firing
+	// during recording (only once, at stop()), with the resulting file's real
+	// encoded content covering well under a second despite recording for far
+	// longer. VP8/VP9 use a software encoder, avoiding the contention entirely.
+	"video/webm;codecs=vp9",
+	"video/webm;codecs=vp8",
+	"video/webm;codecs=h264",
+	"video/webm",
 	"video/mp4;codecs=avc1.42E01E",
 	"video/mp4;codecs=avc1",
 	"video/mp4;codecs=h264",
 	"video/mp4",
-	"video/webm;codecs=h264",
-	"video/webm;codecs=vp9",
-	"video/webm",
-	"video/webm;codecs=vp8",
 ] as const;
 
 type MimeTypeSelectorOptions = {

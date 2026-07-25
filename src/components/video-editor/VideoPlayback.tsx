@@ -3152,6 +3152,15 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				<video
 					ref={videoRef}
 					src={videoPath}
+					// mediaServer.ts serves this from a different localhost port than the
+					// renderer page, so it's cross-origin from WebGL's perspective. The
+					// server already sends Access-Control-Allow-Origin, but without this
+					// attribute the browser never makes the CORS-mode request that
+					// permission depends on, so the video loads fine yet still taints
+					// any WebGL texture created from it (Texture.from throws
+					// SecurityError on texImage2D) - the Pixi sprite silently never
+					// gets pixels, while direct <video> playback elsewhere is unaffected.
+					crossOrigin="anonymous"
 					className={fallbackVideoClassName}
 					preload="metadata"
 					playsInline
