@@ -52,6 +52,7 @@ import {
 	isHudOverlayMousePassthroughSupported,
 	reassertHudOverlayMousePassthrough as reassertHudOverlayMouseState,
 	setHudOverlayRecordingActive,
+	setHudOverlayWebcamPreviewActive,
 	showUpdateToastWindow,
 } from "./windows";
 
@@ -311,6 +312,16 @@ function showHudOverlayFromTray() {
 }
 
 function showOrCreateRecordingControls() {
+	// The Studio window has no reason to stay in front once the user is
+	// about to record - it just sits in the way of whatever they're trying
+	// to capture, forcing them to manually switch away from VybeClip before
+	// they can even start. Hiding (not closing) it lets the existing
+	// restore-on-return logic in createWindow()/focusOrCreateMainWindow()
+	// bring it back later exactly as before.
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.hide();
+	}
+
 	const existingHud = getHudOverlayWindow();
 	if (existingHud) {
 		showHudOverlayFromTray();
@@ -1040,6 +1051,17 @@ app.whenReady().then(async () => {
 			hud.close();
 		}
 
+		// The HUD also closes on a successful recording, right as switch-to-editor
+		// hands off to the editor window - in that case Studio should stay hidden
+		// so the editor is the only thing on screen. But if the user canceled
+		// before ever reaching the editor, Studio (hidden in
+		// showOrCreateRecordingControls) needs to come back, or they're left
+		// with no visible VybeClip window at all until they happen to click the
+		// Dock icon.
+		if (!getExistingEditorWindow()) {
+			restoreWindowSafely(mainWindow);
+		}
+
 		// If this was the last window (or we are in a state where we should quit), do it.
 		// We use a small delay to allow window.close() to propagate.
 		setTimeout(() => {
@@ -1098,6 +1120,11 @@ app.whenReady().then(async () => {
 
 	ipcMain.handle("show-recording-controls", () => {
 		showOrCreateRecordingControls();
+		return { success: true };
+	});
+
+	ipcMain.handle("set-hud-overlay-webcam-preview-active", (_event, active: boolean) => {
+		setHudOverlayWebcamPreviewActive(Boolean(active));
 		return { success: true };
 	});
 
