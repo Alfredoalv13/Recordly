@@ -8,7 +8,7 @@ export interface VideoDevice {
 
 let hasRequestedVideoLabels = false;
 
-export function useVideoDevices(enabled: boolean = true) {
+export function useVideoDevices(enabled: boolean = true, allowPermissionProbe: boolean = true) {
 	const [devices, setDevices] = useState<VideoDevice[]>([]);
 	const [selectedDeviceId, setSelectedDeviceId] = useState<string>("default");
 	const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +44,16 @@ export function useVideoDevices(enabled: boolean = true) {
 				const needsLabelPermission =
 					videoInputs.length > 0 && videoInputs.every((device) => !device.label.trim());
 
-				if (needsLabelPermission && !hasRequestedVideoLabels) {
+				// This probe opens its own independent camera session just to read
+				// device labels. useScreenRecorder's actual recording already holds
+				// its own concurrent session on the same physical camera - two
+				// independent getUserMedia() calls on one camera is what truncates
+				// the recorded webcam file to a fraction of a second (see
+				// useWebcamPreviewOverlay's activeRecordingWebcamStream fix, which
+				// only covered the live-preview bubble, not this device list probe).
+				// Device labels aren't needed while a recording is already running,
+				// so just skip the probe rather than contend for the camera.
+				if (needsLabelPermission && !hasRequestedVideoLabels && allowPermissionProbe) {
 					permissionStream = await navigator.mediaDevices.getUserMedia({
 						video: true,
 						audio: false,
@@ -106,7 +115,7 @@ export function useVideoDevices(enabled: boolean = true) {
 			mounted = false;
 			navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange);
 		};
-	}, [enabled]);
+	}, [enabled, allowPermissionProbe]);
 
 	return {
 		devices,
