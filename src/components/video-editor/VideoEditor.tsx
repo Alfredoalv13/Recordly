@@ -5309,6 +5309,7 @@ export default function VideoEditor() {
 			annotationRegions={annotationRegions}
 			autoCaptions={autoCaptions}
 			autoCaptionSettings={autoCaptionSettings}
+			onAutoCaptionsChange={setAutoCaptions}
 			selectedAnnotationId={selectedAnnotationId}
 			onSelectAnnotation={handleSelectAnnotation}
 			onAnnotationPositionChange={handleAnnotationPositionChange}

@@ -22,6 +22,11 @@ import {
 	DEFAULT_WALLPAPER_RELATIVE_PATH,
 	isVideoWallpaperSource,
 } from "@/lib/wallpapers";
+import {
+	type CaptionEditTarget,
+	normalizeCaptionEditText,
+	updateCaptionCuesForEditedTarget,
+} from "./captionEditing";
 import { buildActiveCaptionLayout } from "./captionLayout";
 import {
 	CAPTION_FONT_WEIGHT,
@@ -362,6 +367,7 @@ interface VideoPlaybackProps {
 	annotationRegions?: AnnotationRegion[];
 	autoCaptions?: CaptionCue[];
 	autoCaptionSettings?: AutoCaptionSettings;
+	onAutoCaptionsChange?: (cues: CaptionCue[]) => void;
 	selectedAnnotationId?: string | null;
 	onSelectAnnotation?: (id: string | null) => void;
 	onAnnotationPositionChange?: (id: string, position: { x: number; y: number }) => void;
@@ -445,6 +451,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			annotationRegions = [],
 			autoCaptions = [],
 			autoCaptionSettings,
+			onAutoCaptionsChange,
 			selectedAnnotationId,
 			onSelectAnnotation,
 			onAnnotationPositionChange,
@@ -526,6 +533,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			height: number;
 		} | null>(null);
 		const captionBoxRef = useRef<HTMLDivElement | null>(null);
+		const captionEditTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+		const [editingCaptionTarget, setEditingCaptionTarget] = useState<CaptionEditTarget | null>(
+			null,
+		);
+		const [captionEditDraft, setCaptionEditDraft] = useState("");
 		const captionClipPathFrameRef = useRef<number | null>(null);
 		const captionClipPathSignatureRef = useRef<string | null>(null);
 		const currentTimeRef = useRef(0);
@@ -731,6 +743,68 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				measureText: (text) => measurementContext.measureText(text).width,
 			});
 		}, [autoCaptionSettings, autoCaptions, currentTime]);
+
+		// If the layout block being edited scrolls out of view (e.g. the user
+		// seeks away while a caption textarea is focused), drop the edit rather
+		// than leaving state pointing at a target that can no longer be
+		// committed against the currently visible layout.
+		useEffect(() => {
+			if (
+				editingCaptionTarget &&
+				activeCaptionLayout?.editTarget.id !== editingCaptionTarget.id
+			) {
+				setEditingCaptionTarget(null);
+			}
+		}, [activeCaptionLayout, editingCaptionTarget]);
+
+		const handleCaptionBoxDoubleClick = useCallback(() => {
+			if (!activeCaptionLayout || !onAutoCaptionsChange) {
+				return;
+			}
+			videoRef.current?.pause();
+			setEditingCaptionTarget(activeCaptionLayout.editTarget);
+			setCaptionEditDraft(activeCaptionLayout.editTarget.text);
+		}, [activeCaptionLayout, onAutoCaptionsChange]);
+
+		const commitCaptionEdit = useCallback(() => {
+			if (!editingCaptionTarget) {
+				return;
+			}
+			const normalizedDraft = normalizeCaptionEditText(captionEditDraft);
+			const normalizedOriginal = normalizeCaptionEditText(editingCaptionTarget.text);
+			if (normalizedDraft && normalizedDraft !== normalizedOriginal) {
+				onAutoCaptionsChange?.(
+					updateCaptionCuesForEditedTarget(autoCaptions, editingCaptionTarget, captionEditDraft),
+				);
+			}
+			setEditingCaptionTarget(null);
+		}, [editingCaptionTarget, captionEditDraft, autoCaptions, onAutoCaptionsChange]);
+
+		const cancelCaptionEdit = useCallback(() => {
+			setEditingCaptionTarget(null);
+		}, []);
+
+		const handleCaptionEditKeyDown = useCallback(
+			(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+				if (event.key === "Enter" && !event.shiftKey) {
+					event.preventDefault();
+					commitCaptionEdit();
+					return;
+				}
+				if (event.key === "Escape") {
+					event.preventDefault();
+					cancelCaptionEdit();
+				}
+			},
+			[commitCaptionEdit, cancelCaptionEdit],
+		);
+
+		useEffect(() => {
+			if (editingCaptionTarget) {
+				captionEditTextareaRef.current?.focus();
+				captionEditTextareaRef.current?.select();
+			}
+		}, [editingCaptionTarget]);
 
 		useEffect(() => {
 			const captionBox = captionBoxRef.current;
@@ -3016,6 +3090,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								>
 									<div
 										ref={captionBoxRef}
+										onDoubleClick={handleCaptionBoxDoubleClick}
 										style={{
 											backgroundColor: `rgba(0, 0, 0, ${autoCaptionSettings.backgroundOpacity})`,
 											fontFamily: getDefaultCaptionFontFamily(),
@@ -3053,42 +3128,73 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 												),
 											)}px`,
 											boxSizing: "border-box",
+											pointerEvents: onAutoCaptionsChange ? "auto" : "none",
+											cursor: onAutoCaptionsChange ? "text" : undefined,
 										}}
+										title={onAutoCaptionsChange ? "Double-click to edit" : undefined}
 									>
-										{activeCaptionLayout.visibleLines.map((line) => (
-											<div
-												key={`${activeCaptionLayout.blockKey}-${line.startWordIndex}`}
+										{editingCaptionTarget &&
+										editingCaptionTarget.id === activeCaptionLayout.editTarget.id ? (
+											<textarea
+												ref={captionEditTextareaRef}
+												value={captionEditDraft}
+												onChange={(event) => setCaptionEditDraft(event.target.value)}
+												onKeyDown={handleCaptionEditKeyDown}
+												onBlur={commitCaptionEdit}
+												rows={1}
 												style={{
-													display: "flex",
-													justifyContent: "center",
-													flexWrap: "nowrap",
-													whiteSpace: "nowrap",
+													display: "block",
+													width: "100%",
+													minWidth: "4ch",
+													resize: "none",
+													border: "none",
+													outline: "none",
+													background: "transparent",
+													color: autoCaptionSettings.textColor,
+													font: "inherit",
+													lineHeight: "inherit",
+													textAlign: "inherit",
+													padding: 0,
+													margin: 0,
+													overflow: "hidden",
 												}}
-											>
-												{line.words.map((word) => {
-													const visualState = getCaptionWordVisualState(
-														activeCaptionLayout.hasWordTimings,
-														word.state,
-													);
+											/>
+										) : (
+											activeCaptionLayout.visibleLines.map((line) => (
+												<div
+													key={`${activeCaptionLayout.blockKey}-${line.startWordIndex}`}
+													style={{
+														display: "flex",
+														justifyContent: "center",
+														flexWrap: "nowrap",
+														whiteSpace: "nowrap",
+													}}
+												>
+													{line.words.map((word) => {
+														const visualState = getCaptionWordVisualState(
+															activeCaptionLayout.hasWordTimings,
+															word.state,
+														);
 
-													return (
-														<span
-															key={`${activeCaptionLayout.blockKey}-${word.index}`}
-															style={{
-																display: "inline-block",
-																whiteSpace: "pre",
-																color: visualState.isInactive
-																	? autoCaptionSettings.inactiveTextColor
-																	: autoCaptionSettings.textColor,
-																opacity: visualState.opacity,
-															}}
-														>
-															{`${word.leadingSpace ? " " : ""}${word.text}`}
-														</span>
-													);
-												})}
-											</div>
-										))}
+														return (
+															<span
+																key={`${activeCaptionLayout.blockKey}-${word.index}`}
+																style={{
+																	display: "inline-block",
+																	whiteSpace: "pre",
+																	color: visualState.isInactive
+																		? autoCaptionSettings.inactiveTextColor
+																		: autoCaptionSettings.textColor,
+																	opacity: visualState.opacity,
+																}}
+															>
+																{`${word.leadingSpace ? " " : ""}${word.text}`}
+															</span>
+														);
+													})}
+												</div>
+											))
+										)}
 									</div>
 								</div>
 							</div>
