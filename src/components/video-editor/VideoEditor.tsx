@@ -536,9 +536,10 @@ export default function VideoEditor() {
 	const [sourceAudioFallbackRefreshKey, setSourceAudioFallbackRefreshKey] = useState(0);
 	const [hasClipSourceAudio, setHasClipSourceAudio] = useState(false);
 	const [autoCaptions, setAutoCaptions] = useState<CaptionCue[]>([]);
-	const [autoCaptionSettings, setAutoCaptionSettings] = useState<AutoCaptionSettings>(
-		DEFAULT_AUTO_CAPTION_SETTINGS,
-	);
+	const [autoCaptionSettings, setAutoCaptionSettings] = useState<AutoCaptionSettings>({
+		...DEFAULT_AUTO_CAPTION_SETTINGS,
+		language: initialEditorPreferences.autoCaptionLanguage,
+	});
 	const [includeCaptionSidecar, setIncludeCaptionSidecar] = useState(true);
 	const [whisperExecutablePath, setWhisperExecutablePath] = useState<string | null>(
 		initialEditorPreferences.whisperExecutablePath,
@@ -2585,6 +2586,7 @@ export default function VideoEditor() {
 			gifFrameRate,
 			gifLoop,
 			gifSizePreset,
+			autoCaptionLanguage: autoCaptionSettings.language,
 			whisperExecutablePath,
 			whisperModelPath,
 		});
@@ -2641,6 +2643,7 @@ export default function VideoEditor() {
 		gifFrameRate,
 		gifLoop,
 		gifSizePreset,
+		autoCaptionSettings.language,
 		whisperExecutablePath,
 		whisperModelPath,
 	]);

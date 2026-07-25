@@ -858,7 +858,7 @@ const BUILTIN_CURSOR_STYLE_OPTIONS: CursorStyleOption[] = [
 	{ value: "figma", label: "Minimal" },
 ];
 
-const CAPTION_LANGUAGE_OPTIONS = [
+export const CAPTION_LANGUAGE_OPTIONS = [
 	{ value: "auto", label: "Auto Detect" },
 	{ value: "en", label: "English" },
 	{ value: "es", label: "Spanish" },

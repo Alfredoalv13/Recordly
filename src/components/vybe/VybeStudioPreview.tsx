@@ -1,5 +1,4 @@
 import {
-	ArrowSquareOutIcon,
 	CameraIcon,
 	CaretDownIcon,
 	CircleNotchIcon,
@@ -19,9 +18,18 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ASPECT_RATIOS, type AspectRatio } from "@/utils/aspectRatioUtils";
+import { BUILT_IN_WALLPAPERS } from "@/lib/wallpapers";
 import { VybeClipLogo } from "../brand/VybeClipLogo";
 import type { ProjectLibraryEntry } from "../video-editor/ProjectBrowserDialog";
+import {
+	type EditorPreferences,
+	loadEditorPreferences,
+	saveEditorPreferences,
+} from "../video-editor/editorPreferences";
 import { toFileUrl } from "../video-editor/projectPersistence";
+import { CAPTION_LANGUAGE_OPTIONS } from "../video-editor/SettingsPanel";
+import type { CursorStyle } from "../video-editor/types";
 import {
 	getStudioPermissionState,
 	importStudioVideo,
@@ -31,11 +39,23 @@ import {
 	startStudioRecording,
 } from "./studioActions";
 
-const inspectorRows = [
-	["Format", "16:9 Desktop"],
-	["Canvas Style", "Clean Demo"],
-	["Pointer", "Soft Highlight"],
-	["Captions", "Smart Draft"],
+const ASPECT_RATIO_LABELS: Record<string, string> = {
+	native: "Native",
+	"16:9": "16:9 Desktop",
+	"9:16": "9:16 Vertical",
+	"1:1": "1:1 Square",
+	"4:3": "4:3",
+	"4:5": "4:5",
+	"16:10": "16:10",
+	"10:16": "10:16",
+};
+
+const CURSOR_STYLE_OPTIONS: Array<{ value: CursorStyle; label: string }> = [
+	{ value: "macos", label: "macOS" },
+	{ value: "tahoe", label: "Tahoe" },
+	{ value: "tahoe-inverted", label: "Tahoe Inverted" },
+	{ value: "dot", label: "Dot" },
+	{ value: "figma", label: "Minimal" },
 ];
 
 function formatProjectDate(updatedAt: number) {
@@ -53,6 +73,15 @@ export function VybeStudioPreview() {
 	const [projectsLoading, setProjectsLoading] = useState(isDesktop);
 	const [pendingAction, setPendingAction] = useState<string | null>(null);
 	const [permissions, setPermissions] = useState<StudioPermissionState | null>(null);
+	const [preferences, setPreferences] = useState<EditorPreferences>(() => loadEditorPreferences());
+
+	const updatePreference = useCallback(<K extends keyof EditorPreferences>(
+		key: K,
+		value: EditorPreferences[K],
+	) => {
+		setPreferences((prev) => ({ ...prev, [key]: value }));
+		saveEditorPreferences({ [key]: value });
+	}, []);
 
 	const refreshProjects = useCallback(async () => {
 		if (!window.electronAPI) return;
@@ -450,37 +479,117 @@ export function VybeStudioPreview() {
 				</main>
 
 				<aside className="hidden min-h-0 border-l border-white/[0.06] bg-[#0A1115] p-4 lg:block">
-					<div className="mb-4 flex items-center justify-between">
-						<div className="flex items-center gap-2 text-xs font-semibold text-[#F3E7DE]">
-							<SlidersHorizontalIcon size={15} className="text-[#D59D80]" />
-							Scene Inspector
-						</div>
-						<button
-							type="button"
-							disabled
-							className="grid h-7 w-7 place-items-center rounded-md border border-white/[0.07] text-[#C6C6D0]/35"
-							aria-label="Inspector options"
-						>
-							<ArrowSquareOutIcon size={14} />
-						</button>
+					<div className="mb-4 flex items-center gap-2 text-xs font-semibold text-[#F3E7DE]">
+						<SlidersHorizontalIcon size={15} className="text-[#D59D80]" />
+						Scene Inspector
 					</div>
 
-					<div className="space-y-3 opacity-65">
-						{inspectorRows.map(([label, value]) => (
-							<label key={label} className="block">
-								<span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C6C6D0]/42">
-									{label}
-								</span>
-								<button
-									type="button"
-									disabled
-									className="flex h-9 w-full items-center justify-between rounded-md border border-white/[0.08] bg-[#05080A] px-3 text-left text-xs text-[#C6C6D0]"
+					<div className="space-y-3">
+						<label className="block">
+							<span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C6C6D0]/42">
+								Format
+							</span>
+							<span className="relative block">
+								<select
+									value={preferences.aspectRatio}
+									onChange={(event) =>
+										updatePreference("aspectRatio", event.target.value as AspectRatio)
+									}
+									disabled={actionsDisabled}
+									className="h-9 w-full appearance-none rounded-md border border-white/[0.08] bg-[#05080A] px-3 pr-8 text-left text-xs text-[#C6C6D0] disabled:opacity-45"
 								>
-									{value}
-									<CaretDownIcon size={12} className="text-[#D59D80]" />
-								</button>
-							</label>
-						))}
+									{ASPECT_RATIOS.map((ratio) => (
+										<option key={ratio} value={ratio}>
+											{ASPECT_RATIO_LABELS[ratio] ?? ratio}
+										</option>
+									))}
+								</select>
+								<CaretDownIcon
+									size={12}
+									className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#D59D80]"
+								/>
+							</span>
+						</label>
+
+						<label className="block">
+							<span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C6C6D0]/42">
+								Wallpaper
+							</span>
+							<span className="relative block">
+								<select
+									value={preferences.wallpaper}
+									onChange={(event) => updatePreference("wallpaper", event.target.value)}
+									disabled={actionsDisabled}
+									className="h-9 w-full appearance-none rounded-md border border-white/[0.08] bg-[#05080A] px-3 pr-8 text-left text-xs text-[#C6C6D0] disabled:opacity-45"
+								>
+									{BUILT_IN_WALLPAPERS.map((wallpaper) => (
+										<option key={wallpaper.id} value={wallpaper.publicPath}>
+											{wallpaper.label}
+										</option>
+									))}
+								</select>
+								<CaretDownIcon
+									size={12}
+									className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#D59D80]"
+								/>
+							</span>
+						</label>
+
+						<label className="block">
+							<span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C6C6D0]/42">
+								Pointer
+							</span>
+							<span className="relative block">
+								<select
+									value={preferences.cursorStyle}
+									onChange={(event) =>
+										updatePreference("cursorStyle", event.target.value as CursorStyle)
+									}
+									disabled={actionsDisabled}
+									className="h-9 w-full appearance-none rounded-md border border-white/[0.08] bg-[#05080A] px-3 pr-8 text-left text-xs text-[#C6C6D0] disabled:opacity-45"
+								>
+									{CURSOR_STYLE_OPTIONS.map((option) => (
+										<option key={option.value} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+								<CaretDownIcon
+									size={12}
+									className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#D59D80]"
+								/>
+							</span>
+						</label>
+
+						<label className="block">
+							<span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C6C6D0]/42">
+								Caption Language
+							</span>
+							<span className="relative block">
+								<select
+									value={preferences.autoCaptionLanguage}
+									onChange={(event) =>
+										updatePreference("autoCaptionLanguage", event.target.value)
+									}
+									disabled={actionsDisabled}
+									className="h-9 w-full appearance-none rounded-md border border-white/[0.08] bg-[#05080A] px-3 pr-8 text-left text-xs text-[#C6C6D0] disabled:opacity-45"
+								>
+									{CAPTION_LANGUAGE_OPTIONS.map((option) => (
+										<option key={option.value} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+								<CaretDownIcon
+									size={12}
+									className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#D59D80]"
+								/>
+							</span>
+						</label>
+						<p className="text-[10px] leading-relaxed text-[#C6C6D0]/40">
+							Applied to new recordings when you open them in the editor. Captions
+							still need to be generated manually there.
+						</p>
 					</div>
 
 					<button
