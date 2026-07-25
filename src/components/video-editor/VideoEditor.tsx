@@ -27,6 +27,7 @@ import {
 	SpeakerHigh as Volume2,
 	SpeakerX as VolumeX,
 	MagicWand as WandSparkles,
+	WaveformSlash,
 	X,
 	MagnifyingGlassPlus as ZoomIn,
 } from "@phosphor-icons/react";
@@ -169,6 +170,12 @@ import {
 	openExternalLink,
 	VYBECLIP_ISSUES_URL,
 } from "./TutorialHelp";
+import {
+	decodeAudioChannelsFromResource,
+	resolveSilenceAudioTrackOptions,
+	type SilenceAudioTrackOption,
+} from "./timeline/silenceAudioSource";
+import { applySilenceSpansToClipRegions, detectSilenceSpans } from "./timeline/silenceDetection";
 import TimelineEditor, { type TimelineEditorHandle } from "./timeline/TimelineEditor";
 import {
 	normalizeCursorTelemetry,
@@ -653,6 +660,11 @@ export default function VideoEditor() {
 	const [previewVersion, setPreviewVersion] = useState(0);
 	const [isPreviewReady, setIsPreviewReady] = useState(false);
 	const [autoSuggestZoomsTrigger, setAutoSuggestZoomsTrigger] = useState(0);
+	const [silenceTrackOptions, setSilenceTrackOptions] = useState<SilenceAudioTrackOption[] | null>(
+		null,
+	);
+	const [isLoadingSilenceTrackOptions, setIsLoadingSilenceTrackOptions] = useState(false);
+	const [isRemovingSilence, setIsRemovingSilence] = useState(false);
 	const headerLeftControlsPaddingClass = appPlatform === "darwin" ? "pl-[76px]" : "";
 
 	const videoPlaybackRef = useRef<VideoPlaybackRef>(null);
@@ -3895,6 +3907,94 @@ export default function VideoEditor() {
 		[clipRegions, selectedClipId],
 	);
 
+	const handleOpenRemoveSilenceMenu = useCallback(
+		(open: boolean) => {
+			if (!open || silenceTrackOptions || isLoadingSilenceTrackOptions) {
+				return;
+			}
+			const sourcePath = videoSourcePath || videoPath;
+			if (!sourcePath) {
+				return;
+			}
+			setIsLoadingSilenceTrackOptions(true);
+			void resolveSilenceAudioTrackOptions(sourcePath)
+				.then((options) => setSilenceTrackOptions(options))
+				.catch(() => setSilenceTrackOptions([]))
+				.finally(() => setIsLoadingSilenceTrackOptions(false));
+		},
+		[silenceTrackOptions, isLoadingSilenceTrackOptions, videoSourcePath, videoPath],
+	);
+
+	const handleRemoveSilence = useCallback(
+		async (track: SilenceAudioTrackOption) => {
+			if (isRemovingSilence) {
+				return;
+			}
+			setIsRemovingSilence(true);
+			try {
+				const { channelData, sampleRate } = await decodeAudioChannelsFromResource(
+					track.resourcePath,
+				);
+				const silenceSpans = detectSilenceSpans(channelData, sampleRate);
+				if (silenceSpans.length === 0) {
+					toast.info(
+						t(
+							"editor.timeline.noSilenceDetected",
+							"No silent gaps found in the {{track}} track.",
+							{ track: track.label },
+						),
+					);
+					return;
+				}
+
+				const totalMs = Math.max(0, Math.round(duration * 1000));
+				const result = applySilenceSpansToClipRegions(
+					clipRegions.length > 0
+						? clipRegions
+						: [{ id: `clip-${nextClipIdRef.current++}`, startMs: 0, endMs: totalMs, speed: 1 }],
+					silenceSpans,
+					() => `clip-${nextClipIdRef.current++}`,
+				);
+
+				setClipRegions(result.clipRegions);
+				const removeOverlapping = <T extends { startMs: number; endMs: number }>(
+					regions: T[],
+				): T[] =>
+					regions.filter(
+						(region) =>
+							!result.removedSpans.some(
+								(span) => region.startMs < span.endMs && region.endMs > span.startMs,
+							),
+					);
+				setZoomRegions((prev) => removeOverlapping(prev));
+				setAnnotationRegions((prev) => removeOverlapping(prev));
+				setSpeedRegions((prev) => removeOverlapping(prev));
+				setAudioRegions((prev) => removeOverlapping(prev));
+
+				const totalRemovedMs = result.removedSpans.reduce(
+					(sum, span) => sum + (span.endMs - span.startMs),
+					0,
+				);
+				toast.success(
+					t(
+						"editor.timeline.silenceRemoved",
+						"Removed {{count}} silent gap(s), {{seconds}}s total.",
+						{
+							count: result.removedSpans.length,
+							seconds: (totalRemovedMs / 1000).toFixed(1),
+						},
+					),
+				);
+			} catch (error) {
+				toast.error(getErrorMessage(error));
+			} finally {
+				setIsRemovingSilence(false);
+				setSilenceTrackOptions(null);
+			}
+		},
+		[isRemovingSilence, clipRegions, duration, t],
+	);
+
 	const handleSelectAudio = useCallback((id: string | null) => {
 		setSelectedAudioId(id);
 		if (id) {
@@ -6410,6 +6510,56 @@ export default function VideoEditor() {
 								>
 									<Scissors className="w-4 h-4" />
 								</Button>
+								<DropdownMenu onOpenChange={handleOpenRemoveSilenceMenu}>
+									<DropdownMenuTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon"
+											disabled={isRemovingSilence}
+											className="h-7 w-7 rounded-full text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground"
+											title={t(
+												"editor.toolbar.removeSilence",
+												"Remove Silence",
+											)}
+										>
+											{isRemovingSilence || isLoadingSilenceTrackOptions ? (
+												<CircleNotch className="w-4 h-4 animate-spin" />
+											) : (
+												<WaveformSlash className="w-4 h-4" />
+											)}
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" sideOffset={10}>
+										{isLoadingSilenceTrackOptions && (
+											<DropdownMenuItem disabled>
+												{t(
+													"editor.toolbar.removeSilenceChecking",
+													"Checking available audio…",
+												)}
+											</DropdownMenuItem>
+										)}
+										{!isLoadingSilenceTrackOptions &&
+											silenceTrackOptions?.length === 0 && (
+												<DropdownMenuItem disabled>
+													{t(
+														"editor.toolbar.removeSilenceNoAudio",
+														"No audio found for this recording",
+													)}
+												</DropdownMenuItem>
+											)}
+										{!isLoadingSilenceTrackOptions &&
+											silenceTrackOptions?.map((track) => (
+												<DropdownMenuItem
+													key={track.id}
+													disabled={isRemovingSilence}
+													onClick={() => void handleRemoveSilence(track)}
+													className="text-muted-foreground hover:text-foreground hover:bg-foreground/10 cursor-pointer"
+												>
+													{track.label}
+												</DropdownMenuItem>
+											))}
+									</DropdownMenuContent>
+								</DropdownMenu>
 							</div>
 							{/* Playback controls - centered */}
 							<div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
