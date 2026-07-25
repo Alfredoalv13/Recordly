@@ -45,3 +45,8 @@ electron/native/bin/*/whisper-runtime.json
 tmp-*.ps1
 .tmp-*.ps1
 gpu-export-probe.mp4
+
+# Local credentials (notarization, signing, etc.) - never commit actual secrets
+.env
+.env.local
+.env.*.local
