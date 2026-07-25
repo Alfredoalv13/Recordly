@@ -1,4 +1,4 @@
-import { Assets, BlurFilter, Container, Graphics, Sprite, Texture } from "pixi.js";
+import { BlurFilter, Container, Graphics, Sprite, Texture } from "pixi.js";
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
 import minimalCursorUrl from "@/assets/cursors/custom/minimal-cursor.svg";
 import { getRenderableAssetUrl } from "@/lib/assetPath";
@@ -219,7 +219,6 @@ async function createCursorStyleAsset(style: SingleCursorStyle): Promise<LoadedC
 		const sourceCtx = sourceCanvas.getContext("2d")!;
 		sourceCtx.drawImage(image, 0, 0);
 		const trimmed = trimCanvasToAlpha(sourceCanvas, { x: 40, y: 22 });
-		await Assets.load(trimmed.dataUrl);
 		const trimmedImage = await loadImage(trimmed.dataUrl);
 		const texture = configureCursorTexture(Texture.from(trimmed.dataUrl));
 
@@ -248,7 +247,6 @@ async function createCursorStyleAsset(style: SingleCursorStyle): Promise<LoadedC
 	ctx.stroke();
 
 	const dataUrl = canvas.toDataURL("image/png");
-	await Assets.load(dataUrl);
 	const image = await loadImage(dataUrl);
 	const texture = configureCursorTexture(Texture.from(dataUrl));
 
@@ -266,7 +264,6 @@ async function createCursorPackAsset(
 	anchor: { x: number; y: number },
 ): Promise<LoadedCursorAsset> {
 	const renderableUrl = await getRenderableAssetUrl(url);
-	await Assets.load(renderableUrl);
 	const image = await loadImage(renderableUrl);
 	const texture = configureCursorTexture(Texture.from(renderableUrl));
 
@@ -289,7 +286,6 @@ async function createRasterizedCursorAsset(
 	sourceCanvas.height = image.naturalHeight;
 	const sourceCtx = sourceCanvas.getContext("2d");
 	if (!sourceCtx) {
-		await Assets.load(url);
 		const texture = configureCursorTexture(Texture.from(url));
 		return {
 			texture,
@@ -307,7 +303,6 @@ async function createRasterizedCursorAsset(
 		x: sourceCanvas.width * clamp(anchor.x, 0, 1),
 		y: sourceCanvas.height * clamp(anchor.y, 0, 1),
 	});
-	await Assets.load(trimmed.dataUrl);
 	const trimmedImage = await loadImage(trimmed.dataUrl);
 	const texture = configureCursorTexture(Texture.from(trimmed.dataUrl));
 
@@ -439,7 +434,6 @@ async function createInvertedCursorAsset(asset: LoadedCursorAsset): Promise<Load
 	ctx.putImageData(imageData, 0, 0);
 
 	const dataUrl = canvas.toDataURL("image/png");
-	await Assets.load(dataUrl);
 	const image = await loadImage(dataUrl);
 	const texture = configureCursorTexture(Texture.from(dataUrl));
 
