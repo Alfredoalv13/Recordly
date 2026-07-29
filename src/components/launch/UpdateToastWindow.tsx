@@ -220,7 +220,7 @@ export function UpdateToastWindow() {
 		border: "1px solid rgba(182, 65, 15, 0.22)",
 		background:
 			"linear-gradient(180deg, rgba(18, 29, 51, 0.96) 0%, rgba(12, 22, 42, 0.96) 100%)",
-		color: "#dbeafe",
+		color: "#d59d80",
 		fontSize: 13,
 		fontWeight: 600,
 		outline: "none",
@@ -323,7 +323,7 @@ export function UpdateToastWindow() {
 									style={{
 										fontSize: 12,
 										fontWeight: 700,
-										color: "#dbeafe",
+										color: "#d59d80",
 									}}
 								>
 									{normalizedProgress}% complete
@@ -334,7 +334,7 @@ export function UpdateToastWindow() {
 										style={{
 											fontSize: 11,
 											fontWeight: 600,
-											color: "rgba(191, 219, 254, 0.9)",
+											color: "rgba(213, 157, 128, 0.9)",
 											background: "rgba(182, 65, 15, 0.12)",
 											borderRadius: 999,
 											padding: "4px 8px",
