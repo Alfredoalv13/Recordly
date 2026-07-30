@@ -86,10 +86,22 @@ export function RedactionSuggestionsPanel({
 			<ul className="max-h-56 space-y-1 overflow-y-auto px-2 py-2">
 				{suggestions.map((suggestion) => (
 					<li key={suggestion.id}>
-						<button
-							type="button"
+						{/* A native <button> can't contain the Accept/Reject <Button>s
+						    below — nested interactive elements are invalid HTML and
+						    unreliable for assistive tech. role="button" + explicit
+						    key handling gets the same click/keyboard behavior without
+						    nesting a real button inside a real button. */}
+						<div
+							role="button"
+							tabIndex={0}
 							onClick={() => onPreview(suggestion)}
-							className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-foreground/[0.06]"
+							onKeyDown={(event) => {
+								if (event.key === "Enter" || event.key === " ") {
+									event.preventDefault();
+									onPreview(suggestion);
+								}
+							}}
+							className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-foreground/[0.06]"
 						>
 							<div className="flex min-w-0 flex-1 items-center gap-2">
 								<span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
@@ -140,7 +152,7 @@ export function RedactionSuggestionsPanel({
 									<X className="h-3.5 w-3.5" />
 								</Button>
 							</div>
-						</button>
+						</div>
 					</li>
 				))}
 			</ul>
