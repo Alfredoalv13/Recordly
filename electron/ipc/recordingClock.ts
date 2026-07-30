@@ -50,3 +50,50 @@ export function mapWallClockToElapsedMs(tsMs: number, params: RecordingClockPara
 
 	return Math.max(0, tsMs - recordingStartMs - pauseDurationBeforeTs);
 }
+
+/**
+ * Opens a new pause interval, unless one is already open.
+ *
+ * The renderer's pause guard reads React state through a closure
+ * (`if (!recording || paused) return;`) — two rapid pause invocations can
+ * both observe `paused === false` before the first call's `setPaused(true)`
+ * commits, so a duplicate `pause-cursor-capture` IPC call with no resume in
+ * between is a real scenario, not just a defensive hypothetical (mirrors
+ * `pauseCursorCaptureAtBoundary`'s own idempotency guard in cursor/telemetry.ts,
+ * which exists for exactly this reason).
+ *
+ * Appending a second open interval on a duplicate call would leave the
+ * FIRST one permanently unresolved, since resume only ever patches the last
+ * array entry — `mapWallClockToElapsedMs` would then treat every timestamp
+ * from that stale pause onward as "inside a pause" for the rest of the
+ * recording.
+ */
+export function appendPauseInterval(
+	intervals: RecordingPauseInterval[],
+	pausedAtMs: number,
+): RecordingPauseInterval[] {
+	const lastIndex = intervals.length - 1;
+	const alreadyPaused = lastIndex >= 0 && intervals[lastIndex].resumedAtMs === null;
+	if (alreadyPaused) {
+		return intervals;
+	}
+	return [...intervals, { pausedAtMs, resumedAtMs: null }];
+}
+
+/**
+ * Resolves the most recent open pause interval, if any. A resume with no
+ * open pause (duplicate resume, or resume with no prior pause at all) is a
+ * safe no-op — mirrors `resumeCursorCapture`'s own guard.
+ */
+export function resolvePauseInterval(
+	intervals: RecordingPauseInterval[],
+	resumedAtMs: number,
+): RecordingPauseInterval[] {
+	const lastIndex = intervals.length - 1;
+	if (lastIndex < 0 || intervals[lastIndex].resumedAtMs !== null) {
+		return intervals;
+	}
+	const updated = intervals.slice();
+	updated[lastIndex] = { ...updated[lastIndex], resumedAtMs };
+	return updated;
+}

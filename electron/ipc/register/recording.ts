@@ -40,6 +40,7 @@ import {
 	getWindowsCaptureExePath,
 } from "../paths/binaries";
 import { rememberApprovedLocalReadPath } from "../project/manager";
+import { appendPauseInterval, resolvePauseInterval } from "../recordingClock";
 import {
 	getBrowserMicSidecarFilters,
 	shouldKeepRecordingAudioSidecars,
@@ -1866,24 +1867,16 @@ export function registerRecordingHandlers(
 		// this ordered interval list lets an arbitrary past timestamp (e.g.
 		// from BlurBox's redaction event log) be correctly mapped to
 		// video-relative time later, which a running total alone can't do.
-		setRecordingPauseIntervals([
-			...recordingPauseIntervals,
-			{ pausedAtMs: normalizedPausedAtMs, resumedAtMs: null },
-		]);
+		// See appendPauseInterval's doc comment for why the idempotency
+		// guard against a duplicate pause call matters.
+		setRecordingPauseIntervals(appendPauseInterval(recordingPauseIntervals, normalizedPausedAtMs));
 		return { success: true };
 	});
 
 	ipcMain.handle("resume-cursor-capture", (_, resumedAtMs?: unknown) => {
 		const normalizedResumedAtMs = normalizeRendererTimestampMs(resumedAtMs);
 		resumeCursorCapture(normalizedResumedAtMs);
-
-		const lastIndex = recordingPauseIntervals.length - 1;
-		if (lastIndex >= 0 && recordingPauseIntervals[lastIndex].resumedAtMs === null) {
-			const updated = recordingPauseIntervals.slice();
-			updated[lastIndex] = { ...updated[lastIndex], resumedAtMs: normalizedResumedAtMs };
-			setRecordingPauseIntervals(updated);
-		}
-
+		setRecordingPauseIntervals(resolvePauseInterval(recordingPauseIntervals, normalizedResumedAtMs));
 		sampleCursorPoint();
 		return { success: true };
 	});

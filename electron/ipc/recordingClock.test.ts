@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mapWallClockToElapsedMs } from "./recordingClock";
+import { appendPauseInterval, mapWallClockToElapsedMs, resolvePauseInterval } from "./recordingClock";
 
 describe("mapWallClockToElapsedMs", () => {
 	const recordingStartMs = 1_000_000;
@@ -130,5 +130,61 @@ describe("mapWallClockToElapsedMs", () => {
 				],
 			}),
 		).toBe(0);
+	});
+});
+
+describe("appendPauseInterval", () => {
+	it("opens a new interval on an empty list", () => {
+		expect(appendPauseInterval([], 1000)).toEqual([{ pausedAtMs: 1000, resumedAtMs: null }]);
+	});
+
+	it("opens a new interval when the last one is already resolved", () => {
+		const existing = [{ pausedAtMs: 100, resumedAtMs: 200 }];
+		expect(appendPauseInterval(existing, 1000)).toEqual([
+			{ pausedAtMs: 100, resumedAtMs: 200 },
+			{ pausedAtMs: 1000, resumedAtMs: null },
+		]);
+	});
+
+	it("does NOT open a second interval when one is already open (duplicate pause call)", () => {
+		// Regression: a duplicate pause-cursor-capture IPC call with no resume
+		// in between must not leave the first interval permanently
+		// unresolved — only the last array entry ever gets patched on resume.
+		const existing = [{ pausedAtMs: 1000, resumedAtMs: null }];
+		expect(appendPauseInterval(existing, 2000)).toEqual(existing);
+		expect(appendPauseInterval(existing, 2000)).toHaveLength(1);
+	});
+});
+
+describe("resolvePauseInterval", () => {
+	it("resolves the open interval", () => {
+		const existing = [{ pausedAtMs: 1000, resumedAtMs: null }];
+		expect(resolvePauseInterval(existing, 1500)).toEqual([{ pausedAtMs: 1000, resumedAtMs: 1500 }]);
+	});
+
+	it("resolves only the LAST interval when several precede it", () => {
+		const existing = [
+			{ pausedAtMs: 100, resumedAtMs: 200 },
+			{ pausedAtMs: 1000, resumedAtMs: null },
+		];
+		expect(resolvePauseInterval(existing, 1500)).toEqual([
+			{ pausedAtMs: 100, resumedAtMs: 200 },
+			{ pausedAtMs: 1000, resumedAtMs: 1500 },
+		]);
+	});
+
+	it("is a no-op when there is no open interval (duplicate resume, or resume with no prior pause)", () => {
+		expect(resolvePauseInterval([], 1500)).toEqual([]);
+		const existing = [{ pausedAtMs: 100, resumedAtMs: 200 }];
+		expect(resolvePauseInterval(existing, 1500)).toEqual(existing);
+	});
+
+	it("round-trips with appendPauseInterval: duplicate pause then a single resume leaves exactly one resolved interval", () => {
+		let intervals: { pausedAtMs: number; resumedAtMs: number | null }[] = [];
+		intervals = appendPauseInterval(intervals, 1000); // real pause
+		intervals = appendPauseInterval(intervals, 1200); // duplicate — no-op
+		intervals = resolvePauseInterval(intervals, 1500); // real resume
+
+		expect(intervals).toEqual([{ pausedAtMs: 1000, resumedAtMs: 1500 }]);
 	});
 });
