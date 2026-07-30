@@ -88,6 +88,15 @@ export interface EditorPreferences extends PersistedEditorControls {
 	customAspectHeight: string;
 	customWallpapers: string[];
 	autoApplyFreshRecordingAutoZooms: boolean;
+	/**
+	 * Whether to check for BlurBox redaction-cut suggestions on a fresh
+	 * recording. Purely a "bother checking or not" toggle — the actual
+	 * privacy-relevant gate (whether BlurBox logs anything at all) lives
+	 * entirely on BlurBox's own side, off by default there. Defaults to true
+	 * here since checking is a no-op when BlurBox isn't installed or hasn't
+	 * logged anything for this recording.
+	 */
+	checkForBlurBoxRedactions: boolean;
 	autoCaptionLanguage: string;
 	whisperExecutablePath: string | null;
 	whisperModelPath: string | null;
@@ -154,6 +163,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
 	customAspectHeight: "9",
 	customWallpapers: [],
 	autoApplyFreshRecordingAutoZooms: true,
+	checkForBlurBoxRedactions: true,
 	autoCaptionLanguage: "auto",
 	whisperExecutablePath: null,
 	whisperModelPath: null,
@@ -451,6 +461,10 @@ export function normalizeEditorPreferences(
 		autoApplyFreshRecordingAutoZooms: normalizeBoolean(
 			raw.autoApplyFreshRecordingAutoZooms,
 			fallback.autoApplyFreshRecordingAutoZooms,
+		),
+		checkForBlurBoxRedactions: normalizeBoolean(
+			raw.checkForBlurBoxRedactions,
+			fallback.checkForBlurBoxRedactions,
 		),
 		autoCaptionLanguage: normalizeCaptionLanguage(
 			raw.autoCaptionLanguage,

@@ -430,6 +430,9 @@ export default function VideoEditor() {
 	const [autoApplyFreshRecordingAutoZooms, setAutoApplyFreshRecordingAutoZooms] = useState(
 		initialEditorPreferences.autoApplyFreshRecordingAutoZooms,
 	);
+	const [checkForBlurBoxRedactions, setCheckForBlurBoxRedactions] = useState(
+		initialEditorPreferences.checkForBlurBoxRedactions,
+	);
 	const [connectZooms, setConnectZooms] = useState(initialEditorPreferences.connectZooms);
 	const [zoomInDurationMs, setZoomInDurationMs] = useState(
 		initialEditorPreferences.zoomInDurationMs ?? DEFAULT_ZOOM_IN_DURATION_MS,
@@ -2568,6 +2571,13 @@ export default function VideoEditor() {
 	}, [autoApplyFreshRecordingAutoZooms]);
 
 	useEffect(() => {
+		if (!checkForBlurBoxRedactions) {
+			pendingFreshRecordingRedactionPathRef.current = null;
+			setRedactionSuggestions([]);
+		}
+	}, [checkForBlurBoxRedactions]);
+
+	useEffect(() => {
 		saveEditorPreferences({
 			wallpaper,
 			shadowIntensity,
@@ -2578,6 +2588,7 @@ export default function VideoEditor() {
 			zoomMotionBlurSampleCount,
 			zoomMotionBlurShutterFraction,
 			autoApplyFreshRecordingAutoZooms,
+			checkForBlurBoxRedactions,
 			connectZooms,
 			zoomInDurationMs,
 			zoomInOverlapMs,
@@ -2635,6 +2646,7 @@ export default function VideoEditor() {
 		zoomMotionBlurSampleCount,
 		zoomMotionBlurShutterFraction,
 		autoApplyFreshRecordingAutoZooms,
+		checkForBlurBoxRedactions,
 		connectZooms,
 		zoomInDurationMs,
 		zoomInOverlapMs,
@@ -3278,6 +3290,7 @@ export default function VideoEditor() {
 	// here for that.
 	useEffect(() => {
 		if (
+			!checkForBlurBoxRedactions ||
 			!videoPath ||
 			loading ||
 			duration <= 0 ||
@@ -3318,7 +3331,7 @@ export default function VideoEditor() {
 		return () => {
 			cancelled = true;
 		};
-	}, [videoPath, loading, duration]);
+	}, [checkForBlurBoxRedactions, videoPath, loading, duration]);
 
 	const normalizedCursorTelemetry = useMemo(() => {
 		if (cursorTelemetry.length === 0) {
@@ -6401,6 +6414,8 @@ export default function VideoEditor() {
 								onAutoApplyFreshRecordingAutoZoomsChange={
 									setAutoApplyFreshRecordingAutoZooms
 								}
+								checkForBlurBoxRedactions={checkForBlurBoxRedactions}
+								onCheckForBlurBoxRedactionsChange={setCheckForBlurBoxRedactions}
 								connectZooms={connectZooms}
 								onConnectZoomsChange={setConnectZooms}
 								zoomInDurationMs={zoomInDurationMs}

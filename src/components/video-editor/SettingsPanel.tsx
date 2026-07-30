@@ -715,6 +715,8 @@ interface SettingsPanelProps {
 	onConnectZoomsChange?: (enabled: boolean) => void;
 	autoApplyFreshRecordingAutoZooms?: boolean;
 	onAutoApplyFreshRecordingAutoZoomsChange?: (enabled: boolean) => void;
+	checkForBlurBoxRedactions?: boolean;
+	onCheckForBlurBoxRedactionsChange?: (enabled: boolean) => void;
 	zoomInDurationMs?: number;
 	onZoomInDurationMsChange?: (duration: number) => void;
 	zoomInOverlapMs?: number;
@@ -1163,6 +1165,8 @@ export function SettingsPanel({
 	onConnectZoomsChange,
 	autoApplyFreshRecordingAutoZooms = true,
 	onAutoApplyFreshRecordingAutoZoomsChange,
+	checkForBlurBoxRedactions = true,
+	onCheckForBlurBoxRedactionsChange,
 	zoomInDurationMs = DEFAULT_ZOOM_IN_DURATION_MS,
 	onZoomInDurationMsChange,
 	zoomOutDurationMs = DEFAULT_ZOOM_OUT_DURATION_MS,
@@ -2887,7 +2891,28 @@ export function SettingsPanel({
 						<Switch
 							checked={autoApplyFreshRecordingAutoZooms}
 							onCheckedChange={onAutoApplyFreshRecordingAutoZoomsChange}
-							className="data-[state=checked]:bg-[#2563EB] scale-75"
+							className="data-[state=checked]:bg-primary scale-75"
+						/>
+					</div>
+					<div className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[0.03] px-2.5 py-2">
+						<div>
+							<div className="text-[11px] font-medium text-foreground">
+								{tSettings(
+									"effects.checkForBlurBoxRedactions",
+									"Check for BlurBox redaction suggestions",
+								)}
+							</div>
+							<div className="mt-0.5 text-[10px] text-muted-foreground/70">
+								{tSettings(
+									"effects.checkForBlurBoxRedactionsDescription",
+									"When you open a new recording, check whether BlurBox logged any redaction moments to suggest cutting. No-op if BlurBox isn't installed.",
+								)}
+							</div>
+						</div>
+						<Switch
+							checked={checkForBlurBoxRedactions}
+							onCheckedChange={onCheckForBlurBoxRedactionsChange}
+							className="data-[state=checked]:bg-primary scale-75"
 						/>
 					</div>
 					<div className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[0.03] px-2.5 py-2">
