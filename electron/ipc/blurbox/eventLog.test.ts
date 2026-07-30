@@ -46,6 +46,36 @@ describe("getBlurBoxEventLogPath", () => {
 			expect(getBlurBoxEventLogPath()).toBeNull();
 		});
 	});
+
+	it("honors RECORDLY_BLURBOX_EVENT_LOG_PATH_OVERRIDE on macOS", () => {
+		vi.stubEnv(
+			"RECORDLY_BLURBOX_EVENT_LOG_PATH_OVERRIDE",
+			"/tmp/fixtures/redaction-events.sample.jsonl",
+		);
+		try {
+			withPlatform("darwin", () => {
+				expect(getBlurBoxEventLogPath()).toBe(
+					"/tmp/fixtures/redaction-events.sample.jsonl",
+				);
+			});
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
+	it("ignores the override on non-macOS platforms — still returns null", () => {
+		vi.stubEnv(
+			"RECORDLY_BLURBOX_EVENT_LOG_PATH_OVERRIDE",
+			"/tmp/fixtures/redaction-events.sample.jsonl",
+		);
+		try {
+			withPlatform("win32", () => {
+				expect(getBlurBoxEventLogPath()).toBeNull();
+			});
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
 });
 
 describe("readBlurBoxEvents", () => {

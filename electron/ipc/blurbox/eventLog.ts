@@ -50,10 +50,22 @@ export interface NormalizedBlurBoxEvent {
  * BlurBox is macOS-only (Carbon global hotkeys, Accessibility APIs) —
  * returns null on every other platform so callers can no-op cleanly rather
  * than attempting a read that could never succeed.
+ *
+ * Honors RECORDLY_BLURBOX_EVENT_LOG_PATH_OVERRIDE (same naming convention as
+ * RECORDLY_UPDATER_LOG_PATH in electron/updater.ts) so a developer can point
+ * this at a hand-written fixture — see
+ * _documentation/BLURBOX_INTEGRATION_TESTING.md — and exercise the full
+ * read → normalize → cluster → review-UI pipeline without BlurBox installed.
+ * The override still only applies on darwin: this feature is unreachable on
+ * other platforms regardless of the env var, matching production behavior.
  */
 export function getBlurBoxEventLogPath(): string | null {
 	if (process.platform !== "darwin") {
 		return null;
+	}
+	const override = process.env.RECORDLY_BLURBOX_EVENT_LOG_PATH_OVERRIDE?.trim();
+	if (override) {
+		return override;
 	}
 	return path.join(
 		os.homedir(),
