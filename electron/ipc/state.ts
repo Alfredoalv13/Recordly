@@ -96,6 +96,19 @@ export let linuxCursorScreenPoint: { x: number; y: number; updatedAt: number } |
 export let selectedWindowBounds: WindowBounds | null = null;
 export let windowBoundsCaptureInterval: NodeJS.Timeout | null = null;
 
+// ── Recording pause intervals ─────────────────────────────────────────────────
+// Ordered list of pause/resume boundaries for the current recording session.
+// Distinct from cursorCaptureAccumulatedPausedMs (a running total useful only
+// for "elapsed as of right now"): this preserves each interval so an
+// arbitrary *past* wall-clock timestamp (e.g. from an external app's event
+// log) can be correctly mapped to video-relative time after the fact — see
+// recordingClock.ts.
+export interface RecordingPauseInterval {
+	pausedAtMs: number;
+	resumedAtMs: number | null;
+}
+export let recordingPauseIntervals: RecordingPauseInterval[] = [];
+
 // ── Native macOS window source cache ─────────────────────────────────────────
 export let cachedNativeMacWindowSources: import("./types").NativeMacWindowSource[] | null = null;
 export let cachedNativeMacWindowSourcesAtMs = 0;
@@ -239,6 +252,10 @@ export function setCountdownRemaining(v: number | null) {
 
 export function setCurrentCursorVisualType(v: CursorVisualType | undefined) {
 	currentCursorVisualType = v;
+}
+
+export function setRecordingPauseIntervals(v: RecordingPauseInterval[]) {
+	recordingPauseIntervals = v;
 }
 
 export function setCursorCaptureInterval(v: NodeJS.Timeout | null) {

@@ -95,6 +95,7 @@ import {
 	nativeCaptureSystemAudioPath,
 	nativeCaptureTargetPath,
 	nativeScreenRecordingActive,
+	recordingPauseIntervals,
 	selectedSource,
 	setActiveCursorSamples,
 	setCachedSystemCursorAssets,
@@ -116,6 +117,7 @@ import {
 	setNativeCaptureTargetPath,
 	setNativeScreenRecordingActive,
 	setPendingCursorSamples,
+	setRecordingPauseIntervals,
 	setWindowsCaptureOutputBuffer,
 	setWindowsCapturePaused,
 	setWindowsCaptureProcess,
@@ -1820,6 +1822,7 @@ export function registerRecordingHandlers(
 			setActiveCursorSamples([]);
 			setPendingCursorSamples([]);
 			setCursorCaptureStartTimeMs(Date.now());
+			setRecordingPauseIntervals([]);
 			resetCursorCaptureClock();
 			setLinuxCursorScreenPoint(null);
 			setLastLeftClick(null);
@@ -1855,12 +1858,30 @@ export function registerRecordingHandlers(
 	});
 
 	ipcMain.handle("pause-cursor-capture", (_, pausedAtMs?: unknown) => {
-		pauseCursorCaptureAtBoundary(normalizeRendererTimestampMs(pausedAtMs));
+		const normalizedPausedAtMs = normalizeRendererTimestampMs(pausedAtMs);
+		pauseCursorCaptureAtBoundary(normalizedPausedAtMs);
+		// Tracked separately from cursor telemetry's own pause bookkeeping —
+		// this ordered interval list lets an arbitrary past timestamp (e.g.
+		// from BlurBox's redaction event log) be correctly mapped to
+		// video-relative time later, which a running total alone can't do.
+		setRecordingPauseIntervals([
+			...recordingPauseIntervals,
+			{ pausedAtMs: normalizedPausedAtMs, resumedAtMs: null },
+		]);
 		return { success: true };
 	});
 
 	ipcMain.handle("resume-cursor-capture", (_, resumedAtMs?: unknown) => {
-		resumeCursorCapture(normalizeRendererTimestampMs(resumedAtMs));
+		const normalizedResumedAtMs = normalizeRendererTimestampMs(resumedAtMs);
+		resumeCursorCapture(normalizedResumedAtMs);
+
+		const lastIndex = recordingPauseIntervals.length - 1;
+		if (lastIndex >= 0 && recordingPauseIntervals[lastIndex].resumedAtMs === null) {
+			const updated = recordingPauseIntervals.slice();
+			updated[lastIndex] = { ...updated[lastIndex], resumedAtMs: normalizedResumedAtMs };
+			setRecordingPauseIntervals(updated);
+		}
+
 		sampleCursorPoint();
 		return { success: true };
 	});
