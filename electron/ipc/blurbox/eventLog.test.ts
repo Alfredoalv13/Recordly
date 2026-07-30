@@ -173,7 +173,12 @@ describe("normalizeBlurBoxEvents", () => {
 	it("maps raw events to video-relative elapsed ms, dropping type/overlayId/action correctly", () => {
 		const normalized = normalizeBlurBoxEvents(
 			[
-				{ v: 1, type: "create_action_started", ts: clockParams.recordingStartMs + 100, action: "drag" },
+				{
+					v: 1,
+					type: "create_action_started",
+					ts: clockParams.recordingStartMs + 100,
+					action: "drag",
+				},
 				{
 					v: 1,
 					type: "overlay_created",
@@ -196,8 +201,18 @@ describe("normalizeBlurBoxEvents", () => {
 	it("drops events that fall outside the recording window (mapWallClockToElapsedMs returns null)", () => {
 		const normalized = normalizeBlurBoxEvents(
 			[
-				{ v: 1, type: "overlay_created", ts: clockParams.recordingStartMs - 5_000, overlayId: "a" },
-				{ v: 1, type: "overlay_created", ts: clockParams.recordingStartMs + 100, overlayId: "b" },
+				{
+					v: 1,
+					type: "overlay_created",
+					ts: clockParams.recordingStartMs - 5_000,
+					overlayId: "a",
+				},
+				{
+					v: 1,
+					type: "overlay_created",
+					ts: clockParams.recordingStartMs + 100,
+					overlayId: "b",
+				},
 			],
 			clockParams,
 		);

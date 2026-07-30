@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { appendPauseInterval, mapWallClockToElapsedMs, resolvePauseInterval } from "./recordingClock";
+import {
+	appendPauseInterval,
+	mapWallClockToElapsedMs,
+	resolvePauseInterval,
+} from "./recordingClock";
 
 describe("mapWallClockToElapsedMs", () => {
 	const recordingStartMs = 1_000_000;
@@ -50,8 +54,14 @@ describe("mapWallClockToElapsedMs", () => {
 				recordingStartMs,
 				recordingEndMs,
 				pauseIntervals: [
-					{ pausedAtMs: recordingStartMs + 10_000, resumedAtMs: recordingStartMs + 15_000 }, // 5s
-					{ pausedAtMs: recordingStartMs + 40_000, resumedAtMs: recordingStartMs + 48_000 }, // 8s
+					{
+						pausedAtMs: recordingStartMs + 10_000,
+						resumedAtMs: recordingStartMs + 15_000,
+					}, // 5s
+					{
+						pausedAtMs: recordingStartMs + 40_000,
+						resumedAtMs: recordingStartMs + 48_000,
+					}, // 8s
 				],
 			}),
 		).toBe(90_000 - 5_000 - 8_000);
@@ -64,7 +74,12 @@ describe("mapWallClockToElapsedMs", () => {
 			mapWallClockToElapsedMs(tsMs, {
 				recordingStartMs,
 				recordingEndMs,
-				pauseIntervals: [{ pausedAtMs: recordingStartMs + 50_000, resumedAtMs: recordingStartMs + 60_000 }],
+				pauseIntervals: [
+					{
+						pausedAtMs: recordingStartMs + 50_000,
+						resumedAtMs: recordingStartMs + 60_000,
+					},
+				],
 			}),
 		).toBe(10_000);
 	});
@@ -159,7 +174,9 @@ describe("appendPauseInterval", () => {
 describe("resolvePauseInterval", () => {
 	it("resolves the open interval", () => {
 		const existing = [{ pausedAtMs: 1000, resumedAtMs: null }];
-		expect(resolvePauseInterval(existing, 1500)).toEqual([{ pausedAtMs: 1000, resumedAtMs: 1500 }]);
+		expect(resolvePauseInterval(existing, 1500)).toEqual([
+			{ pausedAtMs: 1000, resumedAtMs: 1500 },
+		]);
 	});
 
 	it("resolves only the LAST interval when several precede it", () => {

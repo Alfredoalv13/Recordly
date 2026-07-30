@@ -55,7 +55,13 @@ export function getBlurBoxEventLogPath(): string | null {
 	if (process.platform !== "darwin") {
 		return null;
 	}
-	return path.join(os.homedir(), "Library", "Application Support", "BlurBox", "redaction-events.jsonl");
+	return path.join(
+		os.homedir(),
+		"Library",
+		"Application Support",
+		"BlurBox",
+		"redaction-events.jsonl",
+	);
 }
 
 const BLURBOX_EVENT_TYPES: ReadonlySet<string> = new Set<BlurBoxEventType>([
@@ -65,7 +71,10 @@ const BLURBOX_EVENT_TYPES: ReadonlySet<string> = new Set<BlurBoxEventType>([
 	"overlay_removed",
 ]);
 
-const BLURBOX_CREATE_ACTIONS: ReadonlySet<string> = new Set<BlurBoxCreateAction>(["instant", "drag"]);
+const BLURBOX_CREATE_ACTIONS: ReadonlySet<string> = new Set<BlurBoxCreateAction>([
+	"instant",
+	"drag",
+]);
 
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);

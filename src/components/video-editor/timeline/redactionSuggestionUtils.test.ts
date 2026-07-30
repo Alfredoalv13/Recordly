@@ -22,7 +22,11 @@ function removed(elapsedMs: number, overlayId: string): BlurBoxRedactionEvent {
 
 describe("buildRedactionEpisodes (Stage A)", () => {
 	it("anchors an episode's start to the nearest preceding create_action_started", () => {
-		const episodes = buildRedactionEpisodes([started(1000), created(1050, "a"), updated(1600, "a")]);
+		const episodes = buildRedactionEpisodes([
+			started(1000),
+			created(1050, "a"),
+			updated(1600, "a"),
+		]);
 		expect(episodes).toEqual<RedactionEpisode[]>([{ start: 1000, end: 1600 }]);
 	});
 
@@ -73,7 +77,11 @@ describe("buildRedactionEpisodes (Stage A)", () => {
 		// No update either way, so the end still falls back to the creation
 		// time per the approved "end = last move, else creation time" rule —
 		// removal itself is never used as an end marker.
-		const episodes = buildRedactionEpisodes([started(5000), created(5050, "a"), removed(7000, "a")]);
+		const episodes = buildRedactionEpisodes([
+			started(5000),
+			created(5050, "a"),
+			removed(7000, "a"),
+		]);
 		expect(episodes).toEqual<RedactionEpisode[]>([{ start: 5000, end: 5050 }]);
 	});
 
@@ -157,9 +165,12 @@ describe("clusterRedactionEpisodesIntoSuggestions (Stage B + C)", () => {
 	});
 
 	it("flags but does not drop an episode longer than maxWindowMs", () => {
-		const suggestions = clusterRedactionEpisodesIntoSuggestions([{ start: 1000, end: 26_000 }], {
-			totalMs: 40_000,
-		});
+		const suggestions = clusterRedactionEpisodesIntoSuggestions(
+			[{ start: 1000, end: 26_000 }],
+			{
+				totalMs: 40_000,
+			},
+		);
 		expect(suggestions).toEqual([{ start: 900, end: 26_350, isLongOutlier: true }]);
 	});
 

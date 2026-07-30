@@ -1,5 +1,9 @@
 import { ipcMain } from "electron";
-import { blurBoxEventLogExists, normalizeBlurBoxEvents, readBlurBoxEvents } from "../blurbox/eventLog";
+import {
+	blurBoxEventLogExists,
+	normalizeBlurBoxEvents,
+	readBlurBoxEvents,
+} from "../blurbox/eventLog";
 import { cursorCaptureStartTimeMs, recordingPauseIntervals, recordingStoppedAtMs } from "../state";
 
 export function registerBlurBoxHandlers() {
