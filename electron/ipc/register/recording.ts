@@ -118,6 +118,7 @@ import {
 	setNativeScreenRecordingActive,
 	setPendingCursorSamples,
 	setRecordingPauseIntervals,
+	setRecordingStoppedAtMs,
 	setWindowsCaptureOutputBuffer,
 	setWindowsCapturePaused,
 	setWindowsCaptureProcess,
@@ -1837,6 +1838,7 @@ export function registerRecordingHandlers(
 			stopNativeCursorMonitor();
 			showCursor();
 			setLinuxCursorScreenPoint(null);
+			setRecordingStoppedAtMs(Date.now());
 			resetCursorCaptureClock();
 			snapshotCursorTelemetryForPersistence();
 			setActiveCursorSamples([]);

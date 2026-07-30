@@ -108,6 +108,14 @@ export interface RecordingPauseInterval {
 	resumedAtMs: number | null;
 }
 export let recordingPauseIntervals: RecordingPauseInterval[] = [];
+// Wall-clock moment the most recent recording actually stopped (set in the
+// set-recording-state(false) handler — fires uniformly at stop time
+// regardless of which capture backend is finalizing the video afterward).
+// Paired with cursorCaptureStartTimeMs as the [start, end] window used to
+// correlate an external app's event timestamps (e.g. BlurBox) against this
+// recording. Stays valid until the next recording starts; not persisted, so
+// this only ever applies to a recording finished in the current app session.
+export let recordingStoppedAtMs: number | null = null;
 
 // ── Native macOS window source cache ─────────────────────────────────────────
 export let cachedNativeMacWindowSources: import("./types").NativeMacWindowSource[] | null = null;
@@ -256,6 +264,9 @@ export function setCurrentCursorVisualType(v: CursorVisualType | undefined) {
 
 export function setRecordingPauseIntervals(v: RecordingPauseInterval[]) {
 	recordingPauseIntervals = v;
+}
+export function setRecordingStoppedAtMs(v: number | null) {
+	recordingStoppedAtMs = v;
 }
 
 export function setCursorCaptureInterval(v: NodeJS.Timeout | null) {
