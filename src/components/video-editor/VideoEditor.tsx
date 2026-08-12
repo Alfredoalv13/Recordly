@@ -180,7 +180,10 @@ import {
 	type RedactionSuggestionItem,
 	RedactionSuggestionsPanel,
 } from "./timeline/RedactionSuggestionsPanel";
-import { buildRedactionSuggestions } from "./timeline/redactionSuggestionUtils";
+import {
+	buildRedactionSuggestions,
+	MAX_REDACTION_WINDOW_MS,
+} from "./timeline/redactionSuggestionUtils";
 import TimelineEditor, { type TimelineEditorHandle } from "./timeline/TimelineEditor";
 import {
 	normalizeCursorTelemetry,
@@ -4182,6 +4185,24 @@ export default function VideoEditor() {
 		setRedactionSuggestionsDismissed(true);
 	}, []);
 
+	const handleRedactionSuggestionSpanChange = useCallback(
+		(id: string, span: { start: number; end: number }) => {
+			setRedactionSuggestions((prev) =>
+				prev.map((suggestion) =>
+					suggestion.id === id
+						? {
+								...suggestion,
+								start: span.start,
+								end: span.end,
+								isLongOutlier: span.end - span.start > MAX_REDACTION_WINDOW_MS,
+							}
+						: suggestion,
+				),
+			);
+		},
+		[],
+	);
+
 	const handleSelectAudio = useCallback((id: string | null) => {
 		setSelectedAudioId(id);
 		if (id) {
@@ -6901,6 +6922,10 @@ export default function VideoEditor() {
 						onSourceAudioTracksMetaChange={(tracks) => {
 							audio.onSourceAudioTracksMetaChange(tracks);
 						}}
+						redactionSuggestions={
+							redactionSuggestionsDismissed ? [] : redactionSuggestions
+						}
+						onRedactionSuggestionSpanChange={handleRedactionSuggestionSpanChange}
 					/>
 				</div>
 			</div>

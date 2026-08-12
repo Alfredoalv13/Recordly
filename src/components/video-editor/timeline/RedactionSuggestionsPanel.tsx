@@ -29,13 +29,14 @@ function formatTimestamp(ms: number) {
 }
 
 /**
- * Detected windows between a BlurBox overlay being created and settling into
- * place — the "fumbling to cover something sensitive" moments — surfaced as
- * reviewable suggested cuts. Unlike auto-zoom/remove-silence (which apply
- * immediately and rely on undo), these require an explicit Accept before
- * anything touches the timeline: a false positive here (an unrelated box
- * nudge, or boxes placed before anything sensitive was ever shown) should
- * never silently remove footage.
+ * The seconds immediately before each BlurBox overlay was created — the
+ * likely "sensitive content was exposed and not yet covered" window —
+ * surfaced as reviewable suggested cuts. Unlike auto-zoom/remove-silence
+ * (which apply immediately and rely on undo), these require an explicit
+ * Accept before anything touches the timeline: a false positive here (boxes
+ * placed before anything sensitive was ever shown) should never silently
+ * remove footage. The timeline overlay lets the user drag either edge before
+ * accepting, since the fixed window is a guess, not a detected boundary.
  */
 export function RedactionSuggestionsPanel({
 	suggestions,
