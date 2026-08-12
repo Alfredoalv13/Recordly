@@ -38,6 +38,15 @@ export let nativeCaptureStopRequested = false;
 export let nativeCaptureSystemAudioPath: string | null = null;
 export let nativeCaptureMicrophonePath: string | null = null;
 export let nativeCapturePaused = false;
+// Stamped the instant `waitForNativeCaptureStart` observes the Swift
+// helper's "Recording started" line — i.e. as close to the video's actual
+// frame-0 wall-clock instant as this process can observe. Consumed once by
+// `set-recording-state(true)` as the cursor-capture epoch instead of a fresh
+// `Date.now()`, which previously was stamped after an extra IPC round trip
+// plus renderer-side webcam/mic setup — a real, variable, always-nonzero gap
+// that made every cursor sample's elapsed-ms appear "younger" than the
+// video position it was meant to represent.
+export let nativeCaptureVideoStartedAtMs: number | null = null;
 
 // ── Native cursor monitor ─────────────────────────────────────────────────────
 export let nativeCursorMonitorProcess: ChildProcessWithoutNullStreams | null = null;
@@ -96,6 +105,27 @@ export let linuxCursorScreenPoint: { x: number; y: number; updatedAt: number } |
 export let selectedWindowBounds: WindowBounds | null = null;
 export let windowBoundsCaptureInterval: NodeJS.Timeout | null = null;
 
+// ── Recording pause intervals ─────────────────────────────────────────────────
+// Ordered list of pause/resume boundaries for the current recording session.
+// Distinct from cursorCaptureAccumulatedPausedMs (a running total useful only
+// for "elapsed as of right now"): this preserves each interval so an
+// arbitrary *past* wall-clock timestamp (e.g. from an external app's event
+// log) can be correctly mapped to video-relative time after the fact — see
+// recordingClock.ts.
+export interface RecordingPauseInterval {
+	pausedAtMs: number;
+	resumedAtMs: number | null;
+}
+export let recordingPauseIntervals: RecordingPauseInterval[] = [];
+// Wall-clock moment the most recent recording actually stopped (set in the
+// set-recording-state(false) handler — fires uniformly at stop time
+// regardless of which capture backend is finalizing the video afterward).
+// Paired with cursorCaptureStartTimeMs as the [start, end] window used to
+// correlate an external app's event timestamps (e.g. BlurBox) against this
+// recording. Stays valid until the next recording starts; not persisted, so
+// this only ever applies to a recording finished in the current app session.
+export let recordingStoppedAtMs: number | null = null;
+
 // ── Native macOS window source cache ─────────────────────────────────────────
 export let cachedNativeMacWindowSources: import("./types").NativeMacWindowSource[] | null = null;
 export let cachedNativeMacWindowSourcesAtMs = 0;
@@ -153,6 +183,9 @@ export function setNativeCaptureMicrophonePath(v: string | null) {
 }
 export function setNativeCapturePaused(v: boolean) {
 	nativeCapturePaused = v;
+}
+export function setNativeCaptureVideoStartedAtMs(v: number | null) {
+	nativeCaptureVideoStartedAtMs = v;
 }
 
 export function setNativeCursorMonitorProcess(v: ChildProcessWithoutNullStreams | null) {
@@ -239,6 +272,13 @@ export function setCountdownRemaining(v: number | null) {
 
 export function setCurrentCursorVisualType(v: CursorVisualType | undefined) {
 	currentCursorVisualType = v;
+}
+
+export function setRecordingPauseIntervals(v: RecordingPauseInterval[]) {
+	recordingPauseIntervals = v;
+}
+export function setRecordingStoppedAtMs(v: number | null) {
+	recordingStoppedAtMs = v;
 }
 
 export function setCursorCaptureInterval(v: NodeJS.Timeout | null) {

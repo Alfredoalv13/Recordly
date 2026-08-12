@@ -25,6 +25,8 @@ import { calculateTimelineScale } from "./core/time";
 import { useTimelineAudioPeaks } from "./hooks/useTimelineAudioPeaks";
 import { useTimelineEditorRuntime } from "./hooks/useTimelineEditorRuntime";
 import { useTimelineRange } from "./hooks/useTimelineRange";
+import RedactionSuggestionOverlay from "./RedactionSuggestionOverlay";
+import type { RedactionSuggestionItem } from "./RedactionSuggestionsPanel";
 import {
 	buildSourceSidecarPathCandidates,
 	buildTimelineSourceAudioTracks,
@@ -76,6 +78,8 @@ export interface TimelineEditorProps {
 	sourceAudioTrackSettings?: SourceAudioTrackSettings;
 	getSourceAudioTrackSettingsForClip?: (clipId: string | null) => SourceAudioTrackSettings;
 	onSourceAudioTracksMetaChange?: (tracks: SourceAudioTrackMeta) => void;
+	redactionSuggestions?: RedactionSuggestionItem[];
+	onRedactionSuggestionSpanChange?: (id: string, span: { start: number; end: number }) => void;
 }
 
 function extractLocalPathFromMediaServerUrl(input: string | null | undefined): string | null {
@@ -150,6 +154,8 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 			sourceAudioTrackSettings = {},
 			getSourceAudioTrackSettingsForClip,
 			onSourceAudioTracksMetaChange,
+			redactionSuggestions = [],
+			onRedactionSuggestionSpanChange,
 		},
 		ref,
 	) {
@@ -442,6 +448,14 @@ const TimelineEditor = forwardRef<TimelineEditorHandle, TimelineEditorProps>(
 							videoDurationMs={totalMs}
 							timelineRef={timelineContainerRef}
 						/>
+						{onRedactionSuggestionSpanChange && redactionSuggestions.length > 0 && (
+							<RedactionSuggestionOverlay
+								suggestions={redactionSuggestions}
+								onSpanChange={onRedactionSuggestionSpanChange}
+								videoDurationMs={totalMs}
+								timelineRef={timelineContainerRef}
+							/>
+						)}
 						<TimelineCanvas
 							items={timelineItems}
 							videoDurationMs={totalMs}

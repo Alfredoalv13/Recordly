@@ -578,6 +578,13 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		getBlurBoxRedactionEvents: () => Promise<{
+			success: boolean;
+			installed: boolean;
+			events: NormalizedBlurBoxEvent[];
+			message?: string;
+			error?: string;
+		}>;
 		setCursorTelemetry: (
 			videoPath: string | undefined,
 			samples: CursorTelemetryPoint[],
@@ -981,6 +988,13 @@ interface CursorTelemetryPoint {
 		| "resize-ew"
 		| "resize-ns"
 		| "not-allowed";
+}
+
+interface NormalizedBlurBoxEvent {
+	type: "create_action_started" | "overlay_created" | "overlay_updated" | "overlay_removed";
+	elapsedMs: number;
+	overlayId?: string;
+	action?: "instant" | "drag";
 }
 
 interface SystemCursorAsset {

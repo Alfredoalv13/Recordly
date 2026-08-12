@@ -13,6 +13,7 @@ The app is currently moving toward its first macOS MVP. The core recording and e
 - Record a display, window, or application with optional microphone, system audio, and webcam
 - Import an existing video into the editor
 - Add automatic or manual zooms, cursor styling, backgrounds, framing, crop, captions, audio, and annotations
+- (macOS) Auto-detect and suggest cutting the "redaction fumble" — the moment between sensitive on-screen content appearing and it being fully covered — when recording alongside [BlurBox](https://github.com/a3BlurBox/BlurBox); fully optional, off unless BlurBox is installed and its own logging preference is enabled
 - Save and reopen `.vybeclip` projects
 - Open legacy `.recordly` and `.openscreen` projects
 - Export H.264 MP4 video, including source-quality 1080p output

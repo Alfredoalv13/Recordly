@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import { registerAssetHandlers } from "./register/assets";
+import { registerBlurBoxHandlers } from "./register/blurbox";
 import { registerCaptionHandlers } from "./register/captions";
 import { registerExportHandlers } from "./register/export";
 import { registerExportFcpxmlHandlers } from "./register/exportFcpxml";
@@ -71,4 +72,5 @@ export function registerIpcHandlers(
 	registerCaptionHandlers();
 	registerProjectHandlers();
 	registerSettingsHandlers();
+	registerBlurBoxHandlers();
 }

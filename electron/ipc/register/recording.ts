@@ -40,6 +40,7 @@ import {
 	getWindowsCaptureExePath,
 } from "../paths/binaries";
 import { rememberApprovedLocalReadPath } from "../project/manager";
+import { appendPauseInterval, resolvePauseInterval } from "../recordingClock";
 import {
 	getBrowserMicSidecarFilters,
 	shouldKeepRecordingAudioSidecars,
@@ -65,6 +66,7 @@ import {
 	finalizeStoredVideo,
 	muxNativeMacRecordingWithAudio,
 	recoverNativeMacCaptureOutput,
+	sendNativeCaptureCommand,
 	waitForNativeCaptureStart,
 	waitForNativeCaptureStop,
 } from "../recording/mac";
@@ -94,7 +96,9 @@ import {
 	nativeCaptureProcess,
 	nativeCaptureSystemAudioPath,
 	nativeCaptureTargetPath,
+	nativeCaptureVideoStartedAtMs,
 	nativeScreenRecordingActive,
+	recordingPauseIntervals,
 	selectedSource,
 	setActiveCursorSamples,
 	setCachedSystemCursorAssets,
@@ -114,8 +118,11 @@ import {
 	setNativeCaptureStopRequested,
 	setNativeCaptureSystemAudioPath,
 	setNativeCaptureTargetPath,
+	setNativeCaptureVideoStartedAtMs,
 	setNativeScreenRecordingActive,
 	setPendingCursorSamples,
+	setRecordingPauseIntervals,
+	setRecordingStoppedAtMs,
 	setWindowsCaptureOutputBuffer,
 	setWindowsCapturePaused,
 	setWindowsCaptureProcess,
@@ -766,6 +773,12 @@ export function registerRecordingHandlers(
 				});
 
 				await waitForNativeCaptureStart(captProc);
+				// As close as this process can get to the video's true frame-0 wall
+				// clock instant — captured here, synchronously, rather than after the
+				// renderer's later webcam/mic setup and a second IPC round trip (see
+				// nativeCaptureVideoStartedAtMs's doc comment in state.ts for why that
+				// gap mattered).
+				setNativeCaptureVideoStartedAtMs(Date.now());
 				setNativeScreenRecordingActive(true);
 
 				// If the native helper reported MICROPHONE_CAPTURE_UNAVAILABLE, it started
@@ -1304,7 +1317,11 @@ export function registerRecordingHandlers(
 		}
 
 		try {
-			nativeCaptureProcess.stdin.write("pause\n");
+			// Awaited so the renderer's boundary timestamp (captured right after
+			// this IPC call resolves) is taken close to when the native recorder
+			// actually paused, not merely when the stdin write was issued — see
+			// sendNativeCaptureCommand's doc comment.
+			await sendNativeCaptureCommand(nativeCaptureProcess, "pause");
 			setNativeCapturePaused(true);
 			return { success: true };
 		} catch (error) {
@@ -1355,7 +1372,7 @@ export function registerRecordingHandlers(
 		}
 
 		try {
-			nativeCaptureProcess.stdin.write("resume\n");
+			await sendNativeCaptureCommand(nativeCaptureProcess, "resume");
 			setNativeCapturePaused(false);
 			return { success: true };
 		} catch (error) {
@@ -1819,7 +1836,15 @@ export function registerRecordingHandlers(
 			setIsCursorCaptureActive(true);
 			setActiveCursorSamples([]);
 			setPendingCursorSamples([]);
-			setCursorCaptureStartTimeMs(Date.now());
+			// Prefer the timestamp captured right when the native mac capture
+			// actually reported starting (see start-native-screen-recording above)
+			// over a fresh Date.now() here — by this point a full extra IPC round
+			// trip plus renderer-side webcam/mic setup has already elapsed since
+			// the video's true start, which was making every cursor sample look
+			// "younger" than the video position it was meant to represent.
+			setCursorCaptureStartTimeMs(nativeCaptureVideoStartedAtMs ?? Date.now());
+			setNativeCaptureVideoStartedAtMs(null);
+			setRecordingPauseIntervals([]);
 			resetCursorCaptureClock();
 			setLinuxCursorScreenPoint(null);
 			setLastLeftClick(null);
@@ -1834,9 +1859,14 @@ export function registerRecordingHandlers(
 			stopNativeCursorMonitor();
 			showCursor();
 			setLinuxCursorScreenPoint(null);
+			setRecordingStoppedAtMs(Date.now());
 			resetCursorCaptureClock();
 			snapshotCursorTelemetryForPersistence();
 			setActiveCursorSamples([]);
+			// Guard against a stray, unconsumed timestamp (e.g. a native capture
+			// that started but was stopped before set-recording-state(true) ever
+			// ran) leaking into a later, unrelated recording's epoch.
+			setNativeCaptureVideoStartedAtMs(null);
 		}
 
 		const source = selectedSource || { name: "Screen" };
@@ -1855,12 +1885,22 @@ export function registerRecordingHandlers(
 	});
 
 	ipcMain.handle("pause-cursor-capture", (_, pausedAtMs?: unknown) => {
-		pauseCursorCaptureAtBoundary(normalizeRendererTimestampMs(pausedAtMs));
+		const normalizedPausedAtMs = normalizeRendererTimestampMs(pausedAtMs);
+		pauseCursorCaptureAtBoundary(normalizedPausedAtMs);
+		// Tracked separately from cursor telemetry's own pause bookkeeping —
+		// this ordered interval list lets an arbitrary past timestamp (e.g.
+		// from BlurBox's redaction event log) be correctly mapped to
+		// video-relative time later, which a running total alone can't do.
+		// See appendPauseInterval's doc comment for why the idempotency
+		// guard against a duplicate pause call matters.
+		setRecordingPauseIntervals(appendPauseInterval(recordingPauseIntervals, normalizedPausedAtMs));
 		return { success: true };
 	});
 
 	ipcMain.handle("resume-cursor-capture", (_, resumedAtMs?: unknown) => {
-		resumeCursorCapture(normalizeRendererTimestampMs(resumedAtMs));
+		const normalizedResumedAtMs = normalizeRendererTimestampMs(resumedAtMs);
+		resumeCursorCapture(normalizedResumedAtMs);
+		setRecordingPauseIntervals(resolvePauseInterval(recordingPauseIntervals, normalizedResumedAtMs));
 		sampleCursorPoint();
 		return { success: true };
 	});

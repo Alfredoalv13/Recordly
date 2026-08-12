@@ -288,12 +288,20 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		isPaused = true
 		pauseStartedHostTime = CMClockGetTime(CMClockGetHostTimeClock())
 		pendingResumeAdjustment = false
+		// Acked immediately after the host-time stamp so the parent process can
+		// anchor its own pause-duration bookkeeping (used to correlate cursor
+		// telemetry to video time) to this instant, rather than to whenever the
+		// fire-and-forget "pause" stdin write happened to be issued.
+		print("Paused")
+		fflush(stdout)
 	}
 
 	func resumeCapture() {
 		guard isRecording, isPaused else { return }
 		isPaused = false
 		pendingResumeAdjustment = true
+		print("Resumed")
+		fflush(stdout)
 	}
 
 	func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {

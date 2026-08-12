@@ -176,6 +176,14 @@ import {
 	type SilenceAudioTrackOption,
 } from "./timeline/silenceAudioSource";
 import { applySilenceSpansToClipRegions, detectSilenceSpans } from "./timeline/silenceDetection";
+import {
+	type RedactionSuggestionItem,
+	RedactionSuggestionsPanel,
+} from "./timeline/RedactionSuggestionsPanel";
+import {
+	buildRedactionSuggestions,
+	MAX_REDACTION_WINDOW_MS,
+} from "./timeline/redactionSuggestionUtils";
 import TimelineEditor, { type TimelineEditorHandle } from "./timeline/TimelineEditor";
 import {
 	normalizeCursorTelemetry,
@@ -425,6 +433,9 @@ export default function VideoEditor() {
 	const [autoApplyFreshRecordingAutoZooms, setAutoApplyFreshRecordingAutoZooms] = useState(
 		initialEditorPreferences.autoApplyFreshRecordingAutoZooms,
 	);
+	const [checkForBlurBoxRedactions, setCheckForBlurBoxRedactions] = useState(
+		initialEditorPreferences.checkForBlurBoxRedactions,
+	);
 	const [connectZooms, setConnectZooms] = useState(initialEditorPreferences.connectZooms);
 	const [zoomInDurationMs, setZoomInDurationMs] = useState(
 		initialEditorPreferences.zoomInDurationMs ?? DEFAULT_ZOOM_IN_DURATION_MS,
@@ -529,6 +540,10 @@ export default function VideoEditor() {
 	const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
 	const [trimRegions, setTrimRegions] = useState<TrimRegion[]>([]);
 	const [clipRegions, setClipRegions] = useState<ClipRegion[]>([]);
+	// Suggested cuts from BlurBox redaction detection — reviewable, not
+	// applied until the user explicitly accepts each one (or Accept All).
+	const [redactionSuggestions, setRedactionSuggestions] = useState<RedactionSuggestionItem[]>([]);
+	const [redactionSuggestionsDismissed, setRedactionSuggestionsDismissed] = useState(false);
 	const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 	const [speedRegions, setSpeedRegions] = useState<SpeedRegion[]>([]);
 	const [annotationRegions, setAnnotationRegions] = useState<AnnotationRegion[]>([]);
@@ -681,6 +696,12 @@ export default function VideoEditor() {
 	const exporterRef = useRef<CancelableExporter | null>(null);
 	const autoSuggestedVideoPathRef = useRef<string | null>(null);
 	const pendingFreshRecordingAutoZoomPathRef = useRef<string | null>(null);
+	// Independent of the auto-zoom ref above — BlurBox redaction detection is
+	// a much simpler one-shot fetch (no retries/telemetry-point debouncing
+	// needed), so it deliberately doesn't share auto-zoom's more elaborate
+	// state machine.
+	const pendingFreshRecordingRedactionPathRef = useRef<string | null>(null);
+	const redactionSuggestionsComputedForPathRef = useRef<string | null>(null);
 	const editorHistoryRef = useRef(createEditorHistoryStack());
 	const applyingHistoryRef = useRef(false);
 	const pendingExportSaveRef = useRef<PendingExportSave | null>(null);
@@ -2023,6 +2044,7 @@ export default function VideoEditor() {
 			setVideoPath(await resolveVideoUrl(sourcePath));
 			setCurrentProjectPath(path ?? null);
 			pendingFreshRecordingAutoZoomPathRef.current = null;
+			pendingFreshRecordingRedactionPathRef.current = null;
 			if (normalizedEditor.webcam.sourcePath) {
 				await window.electronAPI.setCurrentRecordingSession?.(
 					{
@@ -2253,6 +2275,9 @@ export default function VideoEditor() {
 		nextAnnotationZIndexRef.current = 1;
 		pendingFreshRecordingAutoSuggestTelemetryCountRef.current = 0;
 		autoSuggestedVideoPathRef.current = null;
+		setRedactionSuggestions([]);
+		setRedactionSuggestionsDismissed(false);
+		redactionSuggestionsComputedForPathRef.current = null;
 		resetEditorHistoryStack(editorHistoryRef.current);
 		applyingHistoryRef.current = false;
 		syncHistoryButtons();
@@ -2350,6 +2375,7 @@ export default function VideoEditor() {
 					pendingFreshRecordingAutoZoomPathRef.current = autoApplyFreshRecordingAutoZooms
 						? sourceVideoUrl
 						: null;
+					pendingFreshRecordingRedactionPathRef.current = sourceVideoUrl;
 					setWebcam((prev) => ({
 						...prev,
 						enabled: Boolean(webcamSourcePath),
@@ -2377,6 +2403,7 @@ export default function VideoEditor() {
 					setLastSavedSnapshot(null);
 					resetSourceScopedEditorState();
 					pendingFreshRecordingAutoZoomPathRef.current = null;
+					pendingFreshRecordingRedactionPathRef.current = null;
 					setWebcam((prev) => ({
 						...prev,
 						enabled: !!smokeWebcamSourcePath,
@@ -2437,6 +2464,7 @@ export default function VideoEditor() {
 					pendingFreshRecordingAutoZoomPathRef.current = autoApplyFreshRecordingAutoZooms
 						? sourceVideoUrl
 						: null;
+					pendingFreshRecordingRedactionPathRef.current = sourceVideoUrl;
 					applySessionPresentation(sessionResult.session);
 					setWebcam((prev) => ({
 						...prev,
@@ -2458,6 +2486,7 @@ export default function VideoEditor() {
 					setLastSavedSnapshot(null);
 					resetSourceScopedEditorState();
 					pendingFreshRecordingAutoZoomPathRef.current = null;
+					pendingFreshRecordingRedactionPathRef.current = null;
 					applySessionPresentation(null);
 					setWebcam((prev) => ({
 						...prev,
@@ -2545,6 +2574,13 @@ export default function VideoEditor() {
 	}, [autoApplyFreshRecordingAutoZooms]);
 
 	useEffect(() => {
+		if (!checkForBlurBoxRedactions) {
+			pendingFreshRecordingRedactionPathRef.current = null;
+			setRedactionSuggestions([]);
+		}
+	}, [checkForBlurBoxRedactions]);
+
+	useEffect(() => {
 		saveEditorPreferences({
 			wallpaper,
 			shadowIntensity,
@@ -2555,6 +2591,7 @@ export default function VideoEditor() {
 			zoomMotionBlurSampleCount,
 			zoomMotionBlurShutterFraction,
 			autoApplyFreshRecordingAutoZooms,
+			checkForBlurBoxRedactions,
 			connectZooms,
 			zoomInDurationMs,
 			zoomInOverlapMs,
@@ -2612,6 +2649,7 @@ export default function VideoEditor() {
 		zoomMotionBlurSampleCount,
 		zoomMotionBlurShutterFraction,
 		autoApplyFreshRecordingAutoZooms,
+		checkForBlurBoxRedactions,
 		connectZooms,
 		zoomInDurationMs,
 		zoomInOverlapMs,
@@ -3246,6 +3284,57 @@ export default function VideoEditor() {
 			}
 		};
 	}, [videoPath, videoSourcePath]);
+
+	// BlurBox redaction detection: a one-shot fetch, only for a freshly-loaded
+	// recording (same scope boundary as the auto-zoom flow above — never for
+	// reopening an old project). macOS-only and silently a no-op when BlurBox
+	// isn't installed or has nothing relevant — getBlurBoxRedactionEvents
+	// itself is the platform/availability gate, so no extra check is needed
+	// here for that.
+	useEffect(() => {
+		if (
+			!checkForBlurBoxRedactions ||
+			!videoPath ||
+			loading ||
+			duration <= 0 ||
+			pendingFreshRecordingRedactionPathRef.current !== videoPath ||
+			redactionSuggestionsComputedForPathRef.current === videoPath
+		) {
+			return;
+		}
+
+		let cancelled = false;
+		redactionSuggestionsComputedForPathRef.current = videoPath;
+
+		void (async () => {
+			try {
+				const result = await window.electronAPI.getBlurBoxRedactionEvents();
+				if (cancelled || !result.success || result.events.length === 0) {
+					return;
+				}
+
+				const totalMs = Math.max(0, Math.round(duration * 1000));
+				const suggestions = buildRedactionSuggestions(result.events, { totalMs });
+				if (cancelled || suggestions.length === 0) {
+					return;
+				}
+
+				setRedactionSuggestions(
+					suggestions.map((suggestion, index) => ({
+						...suggestion,
+						id: `redaction-${index}-${suggestion.start}`,
+					})),
+				);
+				setRedactionSuggestionsDismissed(false);
+			} catch (error) {
+				console.warn("Unable to load BlurBox redaction events:", error);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [checkForBlurBoxRedactions, videoPath, loading, duration]);
 
 	const normalizedCursorTelemetry = useMemo(() => {
 		if (cursorTelemetry.length === 0) {
@@ -3993,6 +4082,125 @@ export default function VideoEditor() {
 			}
 		},
 		[isRemovingSilence, clipRegions, duration, t],
+	);
+
+	// Shared excision step for accepting one or more redaction suggestions —
+	// mirrors handleRemoveSilence's clipRegions-split + overlap-pruning
+	// pattern above so acceptance lands on the existing undo stack for free.
+	const applyRedactionSpanRemoval = useCallback(
+		(spans: { startMs: number; endMs: number }[]) => {
+			if (spans.length === 0) {
+				return null;
+			}
+
+			const totalMs = Math.max(0, Math.round(duration * 1000));
+			const result = applySilenceSpansToClipRegions(
+				clipRegions.length > 0
+					? clipRegions
+					: [{ id: `clip-${nextClipIdRef.current++}`, startMs: 0, endMs: totalMs, speed: 1 }],
+				spans,
+				() => `clip-${nextClipIdRef.current++}`,
+			);
+
+			setClipRegions(result.clipRegions);
+			const removeOverlapping = <T extends { startMs: number; endMs: number }>(
+				regions: T[],
+			): T[] =>
+				regions.filter(
+					(region) =>
+						!result.removedSpans.some(
+							(span) => region.startMs < span.endMs && region.endMs > span.startMs,
+						),
+				);
+			setZoomRegions((prev) => removeOverlapping(prev));
+			setAnnotationRegions((prev) => removeOverlapping(prev));
+			setSpeedRegions((prev) => removeOverlapping(prev));
+			setAudioRegions((prev) => removeOverlapping(prev));
+
+			return result;
+		},
+		[clipRegions, duration],
+	);
+
+	const handleAcceptRedactionSuggestion = useCallback(
+		(suggestion: RedactionSuggestionItem) => {
+			const result = applyRedactionSpanRemoval([
+				{ startMs: suggestion.start, endMs: suggestion.end },
+			]);
+			setRedactionSuggestions((prev) => prev.filter((item) => item.id !== suggestion.id));
+
+			if (result && result.removedSpans.length > 0) {
+				const seconds = ((suggestion.end - suggestion.start) / 1000).toFixed(1);
+				toast.success(
+					t(
+						"editor.timeline.redactionSuggestions.acceptedToast",
+						"Cut {{seconds}}s of redaction fumbling.",
+						{ seconds },
+					),
+				);
+			}
+		},
+		[applyRedactionSpanRemoval, t],
+	);
+
+	const handleAcceptAllRedactionSuggestions = useCallback(() => {
+		if (redactionSuggestions.length === 0) {
+			return;
+		}
+
+		const spans = redactionSuggestions.map((suggestion) => ({
+			startMs: suggestion.start,
+			endMs: suggestion.end,
+		}));
+		const count = redactionSuggestions.length;
+		const result = applyRedactionSpanRemoval(spans);
+		setRedactionSuggestions([]);
+
+		if (result && result.removedSpans.length > 0) {
+			const totalSeconds = (
+				result.removedSpans.reduce((sum, span) => sum + (span.endMs - span.startMs), 0) / 1000
+			).toFixed(1);
+			toast.success(
+				t(
+					"editor.timeline.redactionSuggestions.acceptedAllToast",
+					"Cut {{count}} redaction moment(s), {{seconds}}s total.",
+					{ count, seconds: totalSeconds },
+				),
+			);
+		}
+	}, [redactionSuggestions, applyRedactionSpanRemoval, t]);
+
+	const handleRejectRedactionSuggestion = useCallback((suggestion: RedactionSuggestionItem) => {
+		setRedactionSuggestions((prev) => prev.filter((item) => item.id !== suggestion.id));
+	}, []);
+
+	const handlePreviewRedactionSuggestion = useCallback(
+		(suggestion: RedactionSuggestionItem) => {
+			handleSeek(suggestion.start / 1000, { pause: true });
+		},
+		[handleSeek],
+	);
+
+	const handleDismissRedactionSuggestions = useCallback(() => {
+		setRedactionSuggestionsDismissed(true);
+	}, []);
+
+	const handleRedactionSuggestionSpanChange = useCallback(
+		(id: string, span: { start: number; end: number }) => {
+			setRedactionSuggestions((prev) =>
+				prev.map((suggestion) =>
+					suggestion.id === id
+						? {
+								...suggestion,
+								start: span.start,
+								end: span.end,
+								isLongOutlier: span.end - span.start > MAX_REDACTION_WINDOW_MS,
+							}
+						: suggestion,
+				),
+			);
+		},
+		[],
 	);
 
 	const handleSelectAudio = useCallback((id: string | null) => {
@@ -6227,6 +6435,8 @@ export default function VideoEditor() {
 								onAutoApplyFreshRecordingAutoZoomsChange={
 									setAutoApplyFreshRecordingAutoZooms
 								}
+								checkForBlurBoxRedactions={checkForBlurBoxRedactions}
+								onCheckForBlurBoxRedactionsChange={setCheckForBlurBoxRedactions}
 								connectZooms={connectZooms}
 								onConnectZoomsChange={setConnectZooms}
 								zoomInDurationMs={zoomInDurationMs}
@@ -6712,6 +6922,10 @@ export default function VideoEditor() {
 						onSourceAudioTracksMetaChange={(tracks) => {
 							audio.onSourceAudioTracksMetaChange(tracks);
 						}}
+						redactionSuggestions={
+							redactionSuggestionsDismissed ? [] : redactionSuggestions
+						}
+						onRedactionSuggestionSpanChange={handleRedactionSuggestionSpanChange}
 					/>
 				</div>
 			</div>
@@ -6762,6 +6976,17 @@ export default function VideoEditor() {
 
 			{projectBrowser}
 			{nativeCaptureUnavailableDialog}
+
+			{!redactionSuggestionsDismissed ? (
+				<RedactionSuggestionsPanel
+					suggestions={redactionSuggestions}
+					onPreview={handlePreviewRedactionSuggestion}
+					onAccept={handleAcceptRedactionSuggestion}
+					onAcceptAll={handleAcceptAllRedactionSuggestions}
+					onReject={handleRejectRedactionSuggestion}
+					onDismiss={handleDismissRedactionSuggestions}
+				/>
+			) : null}
 
 			<Toaster className="pointer-events-auto" />
 		</div>
