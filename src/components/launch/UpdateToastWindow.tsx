@@ -164,7 +164,7 @@ export function UpdateToastWindow() {
 		borderRadius: 24,
 		background:
 			"linear-gradient(180deg, rgba(12, 19, 34, 0.98) 0%, rgba(10, 17, 30, 0.98) 100%)",
-		border: "1px solid rgba(37, 99, 235, 0.24)",
+		border: "1px solid rgba(182, 65, 15, 0.24)",
 		boxShadow: "0 20px 48px rgba(2, 6, 23, 0.5), inset 0 1px 0 rgba(148, 163, 184, 0.08)",
 		color: "#ffffff",
 		fontFamily: "var(--app-font-sans)",
@@ -177,9 +177,9 @@ export function UpdateToastWindow() {
 		display: "flex",
 		alignItems: "center",
 		justifyContent: "center",
-		background: "rgba(37, 99, 235, 0.16)",
-		color: "#60a5fa",
-		boxShadow: "inset 0 0 0 1px rgba(37, 99, 235, 0.18)",
+		background: "rgba(182, 65, 15, 0.16)",
+		color: "#d59d80",
+		boxShadow: "inset 0 0 0 1px rgba(182, 65, 15, 0.18)",
 	} as const;
 	const titleStyle = {
 		fontSize: 15,
@@ -209,22 +209,22 @@ export function UpdateToastWindow() {
 	const primaryButtonStyle = {
 		...subtleButtonStyle,
 		border: "none",
-		background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
+		background: "linear-gradient(180deg, #d1511a 0%, #b6410f 100%)",
 		color: "#ffffff",
-		boxShadow: "0 12px 24px rgba(37, 99, 235, 0.26)",
+		boxShadow: "0 12px 24px rgba(182, 65, 15, 0.26)",
 	} as const;
 	const selectStyle = {
 		height: 38,
 		borderRadius: 12,
 		padding: "0 34px 0 12px",
-		border: "1px solid rgba(37, 99, 235, 0.22)",
+		border: "1px solid rgba(182, 65, 15, 0.22)",
 		background:
 			"linear-gradient(180deg, rgba(18, 29, 51, 0.96) 0%, rgba(12, 22, 42, 0.96) 100%)",
-		color: "#dbeafe",
+		color: "#d59d80",
 		fontSize: 13,
 		fontWeight: 600,
 		outline: "none",
-		boxShadow: "inset 0 0 0 1px rgba(37, 99, 235, 0.06)",
+		boxShadow: "inset 0 0 0 1px rgba(182, 65, 15, 0.06)",
 		cursor: "pointer",
 	} as const;
 
@@ -279,9 +279,9 @@ export function UpdateToastWindow() {
 									fontWeight: 700,
 									letterSpacing: "0.18em",
 									textTransform: "uppercase",
-									color: "#93c5fd",
-									background: "rgba(37, 99, 235, 0.14)",
-									border: "1px solid rgba(37, 99, 235, 0.18)",
+									color: "#d59d80",
+									background: "rgba(182, 65, 15, 0.14)",
+									border: "1px solid rgba(182, 65, 15, 0.18)",
 								}}
 							>
 								Dev
@@ -306,8 +306,8 @@ export function UpdateToastWindow() {
 										width: `${normalizedProgress}%`,
 										borderRadius: 999,
 										background:
-											"linear-gradient(90deg, #60a5fa 0%, #2563eb 45%, #1d4ed8 100%)",
-										boxShadow: "0 0 22px rgba(37, 99, 235, 0.38)",
+											"linear-gradient(90deg, #d59d80 0%, #b6410f 45%, #89310b 100%)",
+										boxShadow: "0 0 22px rgba(182, 65, 15, 0.38)",
 									}}
 								/>
 							</div>
@@ -323,7 +323,7 @@ export function UpdateToastWindow() {
 									style={{
 										fontSize: 12,
 										fontWeight: 700,
-										color: "#dbeafe",
+										color: "#d59d80",
 									}}
 								>
 									{normalizedProgress}% complete
@@ -334,11 +334,11 @@ export function UpdateToastWindow() {
 										style={{
 											fontSize: 11,
 											fontWeight: 600,
-											color: "rgba(191, 219, 254, 0.9)",
-											background: "rgba(37, 99, 235, 0.12)",
+											color: "rgba(213, 157, 128, 0.9)",
+											background: "rgba(182, 65, 15, 0.12)",
 											borderRadius: 999,
 											padding: "4px 8px",
-											border: "1px solid rgba(37, 99, 235, 0.16)",
+											border: "1px solid rgba(182, 65, 15, 0.16)",
 										}}
 									>
 										{stat.label}: {stat.value}

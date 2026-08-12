@@ -96,7 +96,7 @@ function InstalledExtensionCard({
 				isError
 					? "border-red-500/30 bg-red-500/5"
 					: isActive
-						? "border-[#2563EB]/20 bg-[#2563EB]/5"
+						? "border-primary/20 bg-primary/5"
 						: "border-foreground/[0.06] bg-white/[0.02] hover:bg-foreground/[0.04]",
 			)}
 			onClick={onClick}
@@ -255,7 +255,7 @@ function MarketplaceCard({
 						{extension.tags.slice(0, 3).map((tag) => (
 							<span
 								key={tag}
-								className="text-[8px] px-1 py-[1px] rounded bg-[#2563EB]/10 text-[#2563EB]/70 font-medium"
+								className="text-[8px] px-1 py-[1px] rounded bg-primary/10 text-primary/70 font-medium"
 							>
 								{tag}
 							</span>
@@ -282,7 +282,7 @@ function MarketplaceCard({
 					<Button
 						variant="ghost"
 						size="sm"
-						className="h-7 px-2.5 text-[11px] text-[#2563EB] hover:text-[#2563EB] hover:bg-[#2563EB]/10 font-medium gap-1"
+						className="h-7 px-2.5 text-[11px] text-primary hover:text-primary hover:bg-primary/10 font-medium gap-1"
 						onClick={(e) => {
 							e.stopPropagation();
 							onInstall();
@@ -404,7 +404,7 @@ function ExtensionDetailModal({
 				{/* Header */}
 				<div className="p-5 pb-4">
 					<div className="flex items-start gap-3.5">
-						<div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-[#2563EB]/20 to-[#2563EB]/5 border border-foreground/10 flex items-center justify-center">
+						<div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-foreground/10 flex items-center justify-center">
 							{detail.source === "marketplace" && detail.ext.iconUrl ? (
 								<img
 									src={detail.ext.iconUrl}
@@ -415,7 +415,7 @@ function ExtensionDetailModal({
 								<ExtensionIcon
 									icon={isInstalled ? detail.ext.manifest.icon : undefined}
 									extensionPath={isInstalled ? detail.ext.path : undefined}
-									className="w-5 h-5 text-[#2563EB]/60"
+									className="w-5 h-5 text-primary/60"
 								/>
 							)}
 						</div>
@@ -485,7 +485,7 @@ function ExtensionDetailModal({
 								{detail.ext.tags.map((tag) => (
 									<span
 										key={tag}
-										className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-[#2563EB]/10 text-[#2563EB]/70 font-medium"
+										className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/70 font-medium"
 									>
 										<Tag className="w-2.5 h-2.5" />
 										{tag}
@@ -559,7 +559,7 @@ function ExtensionDetailModal({
 						) : (
 							<Button
 								size="sm"
-								className="h-8 px-3 text-[12px] bg-[#2563EB] hover:bg-[#2563EB]/90 text-white gap-1.5"
+								className="h-8 px-3 text-[12px] bg-primary hover:bg-primary/90 text-white gap-1.5"
 								onClick={onInstall}
 								disabled={isInstalling}
 							>
@@ -622,7 +622,7 @@ function TabSwitcher({
 							{isActive ? (
 								<motion.span
 									layoutId="extension-tab-pill"
-									className="absolute inset-0 rounded-lg bg-[#2563EB]"
+									className="absolute inset-0 rounded-lg bg-primary"
 									transition={{ type: "spring", stiffness: 420, damping: 34 }}
 								/>
 							) : null}
@@ -806,7 +806,7 @@ export default function ExtensionManager() {
 			<div className="flex-shrink-0 p-4 pb-3">
 				<div className="flex items-center justify-between mb-3">
 					<div className="flex items-center gap-2">
-						<Puzzle className="w-4 h-4 text-[#2563EB]" />
+						<Puzzle className="w-4 h-4 text-primary" />
 						<h3 className="text-[13px] font-semibold text-foreground">{t("title")}</h3>
 					</div>
 					<div className="flex items-center gap-0.5">
@@ -1090,7 +1090,7 @@ function BrowseTab({
 						e.stopPropagation();
 						if (e.key === "Enter") onSearch();
 					}}
-					className="w-full h-8 pl-8 pr-3 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#2563EB]/50 focus:border-[#2563EB]/30 transition-colors"
+					className="w-full h-8 pl-8 pr-3 rounded-lg bg-foreground/[0.04] border border-foreground/[0.08] text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-colors"
 				/>
 			</div>
 

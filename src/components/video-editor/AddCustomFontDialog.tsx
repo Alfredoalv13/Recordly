@@ -188,7 +188,7 @@ export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
 						<Button
 							onClick={handleAdd}
 							disabled={loading}
-							className="bg-blue-600 hover:bg-blue-700 text-white"
+							className="bg-primary hover:bg-primary/90 text-white"
 						>
 							{loading ? t("addFont.adding") : t("addFont.addFont")}
 						</Button>
