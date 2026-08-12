@@ -99,7 +99,10 @@ export default function RedactionSuggestionOverlay({
 						style={{
 							[sideProperty]: `${sidebarWidth + startOffsetPx}px`,
 							width: `${widthPx}px`,
-							zIndex: isDraggingThis ? 50 : 38,
+							// Matches KeyframeMarkers.tsx's z-index exactly so neither
+							// overlay's idle handle can block the other's mousedown when
+							// they coincide at the same timeline position.
+							zIndex: isDraggingThis ? 50 : 40,
 						}}
 					>
 						<div
