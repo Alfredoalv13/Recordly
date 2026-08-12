@@ -1,10 +1,18 @@
 /**
  * Turns a raw BlurBox redaction event stream (already wall-clock-mapped to
  * video-relative elapsed ms by the main process — see
- * electron/ipc/blurbox/eventLog.ts) into suggested "cut this window" spans:
- * the time between a new BlurBox box being created and it settling into its
- * final position, i.e. the moment a user fumbles to cover something
- * sensitive that just appeared on screen.
+ * electron/ipc/blurbox/eventLog.ts) into suggested "cut this window" spans.
+ *
+ * Deliberately simple: BlurBox has no OCR, so there's no way to know exactly
+ * when the redacted content first appeared — the only hard signal is
+ * `overlay_created` (the moment a box is actually placed: immediately for
+ * the instant-create hotkey, or on mouse-up for drag-to-create). Rather than
+ * try to reconstruct a "fumbling window" from creation through settling
+ * (tried first, but real-world testing showed it produced suggestions that
+ * extended too far *after* creation instead of covering the exposure
+ * *before* it — see PRE_CREATION_REDACTION_WINDOW_MS), each suggestion is
+ * just a fixed window ending at creation. The timeline overlay lets the user
+ * drag either edge if the default guess is off for a given clip.
  *
  * Mirrors zoomSuggestionUtils.ts's shape (candidate detection → clustering →
  * suggestion list) so this reads as "the same kind of code" alongside it.
@@ -36,20 +44,16 @@ export interface SuggestedRedactionSpan {
 	isLongOutlier: boolean;
 }
 
-/** Max gap between consecutive episodes before they're merged into one suggestion. */
+/** Max gap between consecutive windows before they're merged into one suggestion. */
 export const REDACTION_CLUSTER_MERGE_GAP_MS = 2000;
-/** Padding before the episode start — small, since start is already anchored to the reaction moment. */
-export const REDACTION_LEAD_PAD_MS = 100;
-/** Padding after the episode end — larger, biased toward not leaving an exposed frame at the boundary. */
-export const REDACTION_TRAIL_PAD_MS = 350;
-/** Below this, treat it as a quick single click-to-place with no real fumbling. */
-export const MIN_REDACTION_WINDOW_MS = 400;
+/** Fixed suggestion length: the N ms immediately before a box is created ("release of the click"). */
+export const PRE_CREATION_REDACTION_WINDOW_MS = 1_500;
 /** Above this, keep the suggestion but flag it as an outlier rather than dropping it. */
 export const MAX_REDACTION_WINDOW_MS = 20_000;
 /** A box removed this soon after creation, with no move in between, is treated as a mis-press, not a real redaction. */
 export const ACCIDENTAL_CREATE_GRACE_MS = 1_000;
-/** How far back from an overlay_created a create_action_started may be and still count as its start. */
-export const CREATE_ACTION_MATCH_WINDOW_MS = 60_000;
+/** Floor enforced when a user manually drags a suggestion's start/end handle on the timeline. */
+export const MIN_MANUAL_REDACTION_ADJUST_MS = 100;
 
 export interface RedactionEpisode {
 	start: number;
@@ -57,29 +61,24 @@ export interface RedactionEpisode {
 }
 
 /**
- * Stage A: one episode per newly-created overlay.
+ * Stage A: one fixed-length window per newly-created overlay, ending at
+ * `overlay_created` (the box's creation — instant for the hotkey path, or
+ * the drag-release moment for drag-to-create) and starting
+ * PRE_CREATION_REDACTION_WINDOW_MS earlier.
  *
- * `start` = the nearest preceding `create_action_started` within
- * CREATE_ACTION_MATCH_WINDOW_MS (covers both BlurBox creation paths — the
- * instant-create hotkey spawns a box at a fixed default position, so the
- * real fumbling is the drag/resize that follows; drag-to-create's start is
- * the drag-selector opening, before any box exists yet), falling back to the
- * creation event's own time if no match is found (e.g. an older BlurBox
- * version, or a missed/unpaired start event).
+ * `create_action_started` isn't used as an anchor here — it only marks when
+ * the hotkey was pressed, which for instant-create is essentially
+ * simultaneous with `overlay_created` anyway, and doesn't help estimate when
+ * the content actually appeared.
  *
- * `end` = the last `overlay_updated` for that overlay, falling back to the
- * creation time if the box was never subsequently moved.
- *
- * Only brand-new box creation produces an episode — repositioning an
+ * Only brand-new box creation produces a window — repositioning an
  * already-existing overlay (no matching `overlay_created` in this event
  * set) is out of scope, matching a deliberate v1 product decision.
  */
-export function buildRedactionEpisodes(events: BlurBoxRedactionEvent[]): RedactionEpisode[] {
-	const createActionStartTimes = events
-		.filter((event) => event.type === "create_action_started")
-		.map((event) => event.elapsedMs)
-		.sort((a, b) => a - b);
-
+export function buildRedactionEpisodes(
+	events: BlurBoxRedactionEvent[],
+	windowMs: number = PRE_CREATION_REDACTION_WINDOW_MS,
+): RedactionEpisode[] {
 	const eventsByOverlayId = new Map<string, BlurBoxRedactionEvent[]>();
 	for (const event of events) {
 		if (!event.overlayId) {
@@ -112,26 +111,7 @@ export function buildRedactionEpisodes(events: BlurBoxRedactionEvent[]): Redacti
 			continue;
 		}
 
-		let episodeStart = created.elapsedMs;
-		for (let i = createActionStartTimes.length - 1; i >= 0; i--) {
-			const candidate = createActionStartTimes[i];
-			if (candidate <= created.elapsedMs) {
-				if (created.elapsedMs - candidate <= CREATE_ACTION_MATCH_WINDOW_MS) {
-					episodeStart = candidate;
-				}
-				break;
-			}
-		}
-
-		const episodeEnd =
-			updates.length > 0
-				? Math.max(...updates.map((event) => event.elapsedMs))
-				: created.elapsedMs;
-
-		episodes.push({
-			start: Math.min(episodeStart, episodeEnd),
-			end: Math.max(episodeStart, episodeEnd),
-		});
+		episodes.push({ start: created.elapsedMs - windowMs, end: created.elapsedMs });
 	}
 
 	return episodes.sort((a, b) => a.start - b.start);
@@ -172,21 +152,15 @@ function mergeRedactionEpisodes(
 export interface RedactionClusterOptions {
 	totalMs: number;
 	mergeGapMs?: number;
-	leadPadMs?: number;
-	trailPadMs?: number;
-	minWindowMs?: number;
+	windowMs?: number;
 	maxWindowMs?: number;
 }
 
 /**
- * Stage B + C: merge episodes, then filter/flag by *raw* (pre-padding)
- * duration before padding is applied to the surviving windows.
- *
- * Filtering must happen before padding, not after: leadPadMs + trailPadMs
- * alone is 450ms by default, which already exceeds MIN_REDACTION_WINDOW_MS
- * (400ms) — filtering on the padded span would mean the "drop a quick
- * click-to-place" check could never fire, since padding alone would always
- * clear the threshold regardless of how short the real episode was.
+ * Stage B + C: merge nearby fixed-length windows into one suggestion per
+ * cluster, clamp to the recording's bounds, and flag (never drop) any merged
+ * window longer than maxWindowMs — a false negative (missing a real cut) is
+ * worse than an oversized-but-correct suggestion for a privacy feature.
  */
 export function clusterRedactionEpisodesIntoSuggestions(
 	episodes: RedactionEpisode[],
@@ -195,9 +169,6 @@ export function clusterRedactionEpisodesIntoSuggestions(
 	const {
 		totalMs,
 		mergeGapMs = REDACTION_CLUSTER_MERGE_GAP_MS,
-		leadPadMs = REDACTION_LEAD_PAD_MS,
-		trailPadMs = REDACTION_TRAIL_PAD_MS,
-		minWindowMs = MIN_REDACTION_WINDOW_MS,
 		maxWindowMs = MAX_REDACTION_WINDOW_MS,
 	} = options;
 
@@ -207,12 +178,8 @@ export function clusterRedactionEpisodesIntoSuggestions(
 	const suggestions: SuggestedRedactionSpan[] = [];
 	for (const episode of merged) {
 		const rawDurationMs = episode.end - episode.start;
-		if (rawDurationMs < minWindowMs) {
-			continue;
-		}
-
-		const start = Math.max(0, episode.start - leadPadMs);
-		const end = Math.min(safeTotalMs, episode.end + trailPadMs);
+		const start = Math.max(0, episode.start);
+		const end = Math.min(safeTotalMs, episode.end);
 		if (end <= start) {
 			continue;
 		}
@@ -223,11 +190,36 @@ export function clusterRedactionEpisodesIntoSuggestions(
 	return suggestions.sort((a, b) => a.start - b.start);
 }
 
-/** Full pipeline: raw events → episodes (Stage A) → suggestions (Stage B/C). */
+/**
+ * Clamps a proposed new position for one edge (`"start"` or `"end"`) of a
+ * suggestion the user is manually dragging on the timeline. Keeps the
+ * dragged edge within `[0, totalMs]` and prevents it from crossing the
+ * opposite edge closer than `minWindowMs`, regardless of which edge moved —
+ * the other edge is never touched by this function.
+ */
+export function clampAdjustedRedactionSpan(
+	current: { start: number; end: number },
+	handle: "start" | "end",
+	proposedMs: number,
+	totalMs: number,
+	minWindowMs: number = MIN_MANUAL_REDACTION_ADJUST_MS,
+): { start: number; end: number } {
+	const boundedMs = Math.max(0, Math.min(proposedMs, totalMs));
+
+	if (handle === "start") {
+		const maxStart = current.end - minWindowMs;
+		return { start: Math.min(boundedMs, maxStart), end: current.end };
+	}
+
+	const minEnd = current.start + minWindowMs;
+	return { start: current.start, end: Math.max(boundedMs, minEnd) };
+}
+
+/** Full pipeline: raw events → fixed pre-creation windows (Stage A) → suggestions (Stage B/C). */
 export function buildRedactionSuggestions(
 	events: BlurBoxRedactionEvent[],
 	options: RedactionClusterOptions,
 ): SuggestedRedactionSpan[] {
-	const episodes = buildRedactionEpisodes(events);
+	const episodes = buildRedactionEpisodes(events, options.windowMs);
 	return clusterRedactionEpisodesIntoSuggestions(episodes, options);
 }
