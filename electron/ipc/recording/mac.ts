@@ -77,6 +77,66 @@ export function waitForNativeCaptureStart(process: ChildProcessWithoutNullStream
 	});
 }
 
+/**
+ * Writes a "pause"/"resume" command to the native helper's stdin and waits
+ * for its corresponding stdout ack ("Paused"/"Resumed", printed the instant
+ * ScreenCaptureKitRecorder actually stamps its pause host-time) before
+ * resolving — rather than resolving the instant the write() call returns,
+ * which only proves the bytes reached the OS pipe buffer, not that the
+ * recorder acted on them. The caller's boundary timestamp (captured right
+ * after this resolves) is what cursor-telemetry pause bookkeeping anchors
+ * to, so closing this gap keeps that bookkeeping in sync with the video's
+ * own (separately, correctly) spliced-out pause duration.
+ *
+ * Best-effort: if the ack doesn't arrive within timeoutMs, resolves anyway
+ * rather than blocking or failing the pause/resume action — falling back to
+ * the pre-existing "resolve immediately" behavior, never worse than before.
+ */
+export function sendNativeCaptureCommand(
+	process: ChildProcessWithoutNullStreams,
+	command: "pause" | "resume",
+	timeoutMs = 3000,
+) {
+	const ackMarker = command === "pause" ? "Paused" : "Resumed";
+
+	return new Promise<void>((resolve) => {
+		let settled = false;
+		const cleanup = () => {
+			clearTimeout(timer);
+			process.stdout.off("data", onStdout);
+			process.off("error", onSettleError);
+			process.off("exit", onSettleError);
+		};
+		const settle = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			resolve();
+		};
+
+		const timer = setTimeout(settle, timeoutMs);
+
+		let stdoutBuffer = "";
+		const onStdout = (chunk: Buffer) => {
+			stdoutBuffer += chunk.toString();
+			if (stdoutBuffer.includes(ackMarker)) {
+				settle();
+			}
+		};
+		const onSettleError = () => settle();
+
+		process.stdout.on("data", onStdout);
+		process.once("error", onSettleError);
+		process.once("exit", onSettleError);
+
+		try {
+			process.stdin.write(`${command}\n`);
+		} catch {
+			settle();
+		}
+	});
+}
+
 export function waitForNativeCaptureStop(process: ChildProcessWithoutNullStreams) {
 	return new Promise<string>((resolve, reject) => {
 		const onClose = (code: number | null) => {

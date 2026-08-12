@@ -38,6 +38,15 @@ export let nativeCaptureStopRequested = false;
 export let nativeCaptureSystemAudioPath: string | null = null;
 export let nativeCaptureMicrophonePath: string | null = null;
 export let nativeCapturePaused = false;
+// Stamped the instant `waitForNativeCaptureStart` observes the Swift
+// helper's "Recording started" line — i.e. as close to the video's actual
+// frame-0 wall-clock instant as this process can observe. Consumed once by
+// `set-recording-state(true)` as the cursor-capture epoch instead of a fresh
+// `Date.now()`, which previously was stamped after an extra IPC round trip
+// plus renderer-side webcam/mic setup — a real, variable, always-nonzero gap
+// that made every cursor sample's elapsed-ms appear "younger" than the
+// video position it was meant to represent.
+export let nativeCaptureVideoStartedAtMs: number | null = null;
 
 // ── Native cursor monitor ─────────────────────────────────────────────────────
 export let nativeCursorMonitorProcess: ChildProcessWithoutNullStreams | null = null;
@@ -174,6 +183,9 @@ export function setNativeCaptureMicrophonePath(v: string | null) {
 }
 export function setNativeCapturePaused(v: boolean) {
 	nativeCapturePaused = v;
+}
+export function setNativeCaptureVideoStartedAtMs(v: number | null) {
+	nativeCaptureVideoStartedAtMs = v;
 }
 
 export function setNativeCursorMonitorProcess(v: ChildProcessWithoutNullStreams | null) {

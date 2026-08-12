@@ -66,6 +66,7 @@ import {
 	finalizeStoredVideo,
 	muxNativeMacRecordingWithAudio,
 	recoverNativeMacCaptureOutput,
+	sendNativeCaptureCommand,
 	waitForNativeCaptureStart,
 	waitForNativeCaptureStop,
 } from "../recording/mac";
@@ -95,6 +96,7 @@ import {
 	nativeCaptureProcess,
 	nativeCaptureSystemAudioPath,
 	nativeCaptureTargetPath,
+	nativeCaptureVideoStartedAtMs,
 	nativeScreenRecordingActive,
 	recordingPauseIntervals,
 	selectedSource,
@@ -116,6 +118,7 @@ import {
 	setNativeCaptureStopRequested,
 	setNativeCaptureSystemAudioPath,
 	setNativeCaptureTargetPath,
+	setNativeCaptureVideoStartedAtMs,
 	setNativeScreenRecordingActive,
 	setPendingCursorSamples,
 	setRecordingPauseIntervals,
@@ -770,6 +773,12 @@ export function registerRecordingHandlers(
 				});
 
 				await waitForNativeCaptureStart(captProc);
+				// As close as this process can get to the video's true frame-0 wall
+				// clock instant — captured here, synchronously, rather than after the
+				// renderer's later webcam/mic setup and a second IPC round trip (see
+				// nativeCaptureVideoStartedAtMs's doc comment in state.ts for why that
+				// gap mattered).
+				setNativeCaptureVideoStartedAtMs(Date.now());
 				setNativeScreenRecordingActive(true);
 
 				// If the native helper reported MICROPHONE_CAPTURE_UNAVAILABLE, it started
@@ -1308,7 +1317,11 @@ export function registerRecordingHandlers(
 		}
 
 		try {
-			nativeCaptureProcess.stdin.write("pause\n");
+			// Awaited so the renderer's boundary timestamp (captured right after
+			// this IPC call resolves) is taken close to when the native recorder
+			// actually paused, not merely when the stdin write was issued — see
+			// sendNativeCaptureCommand's doc comment.
+			await sendNativeCaptureCommand(nativeCaptureProcess, "pause");
 			setNativeCapturePaused(true);
 			return { success: true };
 		} catch (error) {
@@ -1359,7 +1372,7 @@ export function registerRecordingHandlers(
 		}
 
 		try {
-			nativeCaptureProcess.stdin.write("resume\n");
+			await sendNativeCaptureCommand(nativeCaptureProcess, "resume");
 			setNativeCapturePaused(false);
 			return { success: true };
 		} catch (error) {
@@ -1823,7 +1836,14 @@ export function registerRecordingHandlers(
 			setIsCursorCaptureActive(true);
 			setActiveCursorSamples([]);
 			setPendingCursorSamples([]);
-			setCursorCaptureStartTimeMs(Date.now());
+			// Prefer the timestamp captured right when the native mac capture
+			// actually reported starting (see start-native-screen-recording above)
+			// over a fresh Date.now() here — by this point a full extra IPC round
+			// trip plus renderer-side webcam/mic setup has already elapsed since
+			// the video's true start, which was making every cursor sample look
+			// "younger" than the video position it was meant to represent.
+			setCursorCaptureStartTimeMs(nativeCaptureVideoStartedAtMs ?? Date.now());
+			setNativeCaptureVideoStartedAtMs(null);
 			setRecordingPauseIntervals([]);
 			resetCursorCaptureClock();
 			setLinuxCursorScreenPoint(null);
@@ -1843,6 +1863,10 @@ export function registerRecordingHandlers(
 			resetCursorCaptureClock();
 			snapshotCursorTelemetryForPersistence();
 			setActiveCursorSamples([]);
+			// Guard against a stray, unconsumed timestamp (e.g. a native capture
+			// that started but was stopped before set-recording-state(true) ever
+			// ran) leaking into a later, unrelated recording's epoch.
+			setNativeCaptureVideoStartedAtMs(null);
 		}
 
 		const source = selectedSource || { name: "Screen" };
